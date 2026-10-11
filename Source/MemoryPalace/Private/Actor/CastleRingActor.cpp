@@ -56,6 +56,11 @@ ACastleRingActor::ACastleRingActor()
 void ACastleRingActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	RebuildRing();
+}
+
+void ACastleRingActor::RebuildRing()
+{
 	ClearGeneratedComponents();
 	for (int32 CastleIndex{0}; CastleIndex < CastleCount;
 		 ++CastleIndex)
@@ -71,6 +76,13 @@ void ACastleRingActor::OnConstruction(const FTransform& Transform)
 void ACastleRingActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	/* Packaged builds load the level without running the
+	   construction again, so the ring is built here instead */
+	if (!GIsEditor)
+	{
+		RebuildRing();
+	}
 	UStudyPadSubsystem* StudyPadSubsystem{
 		GetWorld()->GetSubsystem<UStudyPadSubsystem>()};
 	if (!StudyPadSubsystem)

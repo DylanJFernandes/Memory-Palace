@@ -36,6 +36,11 @@ public:
 	virtual void OnConstruction(
 		const FTransform& Transform) override;
 
+protected:
+	/* Builds the castle in packaged builds, which load the level
+	   without running the construction again */
+	virtual void BeginPlay() override;
+
 private:
 	/* Clears and recreates the pieces and door */
 	void RebuildCastle();

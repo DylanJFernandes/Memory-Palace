@@ -40,6 +40,9 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	/* Clears and recreates every castle and path */
+	void RebuildRing();
+
 	/* Gives each castle, in ring order, one section */
 	void HandleCurriculumLoaded(const FStudyCurriculum& Curriculum);
 

@@ -59,6 +59,15 @@ void ACastleActor::OnConstruction(const FTransform& Transform)
 	RebuildCastle();
 }
 
+void ACastleActor::BeginPlay()
+{
+	Super::BeginPlay();
+	if (!GIsEditor)
+	{
+		RebuildCastle();
+	}
+}
+
 void ACastleActor::RebuildCastle()
 {
 	ClearGeneratedComponents();

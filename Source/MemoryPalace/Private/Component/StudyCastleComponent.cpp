@@ -36,8 +36,8 @@ UStudyCastleComponent::UStudyCastleComponent()
 	, UnlockSound{nullptr}
 	, CrackParameterName{TEXT("CrackAmount")}
 	, RetentionHalfLifeDays{30.0}
-	, LabelOffset{0.0, 0.0, 1800.0}
-	, LabelTextSize{300.0f}
+	, LabelOffset{-300.0, 0.0, 400.0}
+	, LabelTextSize{150.0f}
 	, OrbTargetLocation{FVector::ZeroVector}
 	, bIsUnlocked{false}
 	, bHasFiredBeacon{false}
