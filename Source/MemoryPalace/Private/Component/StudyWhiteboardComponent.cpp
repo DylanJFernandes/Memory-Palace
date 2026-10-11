@@ -1,13 +1,18 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Component/StudyWhiteboardComponent.h"
-#include "Components/WidgetComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Texture2D.h"
 #include "Game/StudyPadImageSubsystem.h"
-#include "UI/Widget/StudyWhiteboardWidget.h"
+#include "Materials/MaterialInstanceDynamic.h"
+
+namespace
+{
+	constexpr int32 WhiteboardMaterialSlotIndex{0};
+}
 
 UStudyWhiteboardComponent::UStudyWhiteboardComponent()
-	: WidgetDrawSize{1024.0, 768.0}
+	: TextureParameterName{TEXT("WhiteboardTexture")}
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -15,19 +20,21 @@ UStudyWhiteboardComponent::UStudyWhiteboardComponent()
 void UStudyWhiteboardComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	CreateWidgetComponent();
+	CreateWhiteboardMaterial();
 	BindToImageSubsystem();
 }
 
-void UStudyWhiteboardComponent::CreateWidgetComponent()
+void UStudyWhiteboardComponent::CreateWhiteboardMaterial()
 {
-	WidgetComponent = NewObject<UWidgetComponent>(GetOwner());
-	WidgetComponent->SetupAttachment(this);
-	WidgetComponent->SetWidgetSpace(EWidgetSpace::World);
-	WidgetComponent->SetWidgetClass(WidgetClass);
-	WidgetComponent->SetDrawSize(WidgetDrawSize);
-	WidgetComponent->RegisterComponent();
-	WidgetComponent->InitWidget();
+	UStaticMeshComponent* WhiteboardMesh{
+		GetOwner()->FindComponentByClass<UStaticMeshComponent>()};
+	if (!WhiteboardMesh)
+	{
+		return;
+	}
+	WhiteboardMaterial =
+		WhiteboardMesh->CreateAndSetMaterialInstanceDynamic(
+			WhiteboardMaterialSlotIndex);
 }
 
 void UStudyWhiteboardComponent::BindToImageSubsystem()
@@ -47,18 +54,12 @@ void UStudyWhiteboardComponent::BindToImageSubsystem()
 void UStudyWhiteboardComponent::HandleImageReceived(
 	UTexture2D* ReceivedTexture)
 {
-	if (!ReceivedTexture)
+	if (!ReceivedTexture || !WhiteboardMaterial)
 	{
 		return;
 	}
-	UStudyWhiteboardWidget* WhiteboardWidget{
-		Cast<UStudyWhiteboardWidget>(
-			WidgetComponent->GetUserWidgetObject())};
-	if (!WhiteboardWidget)
-	{
-		return;
-	}
-	WhiteboardWidget->SetWhiteboardTexture(ReceivedTexture);
+	WhiteboardMaterial->SetTextureParameterValue(
+		TextureParameterName, ReceivedTexture);
 }
 
 void UStudyWhiteboardComponent::EndPlay(

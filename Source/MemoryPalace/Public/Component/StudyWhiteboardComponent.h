@@ -3,18 +3,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/SceneComponent.h"
+#include "Components/ActorComponent.h"
 #include "StudyWhiteboardComponent.generated.h"
 
+class UMaterialInstanceDynamic;
 class UStudyPadImageSubsystem;
-class UStudyWhiteboardWidget;
 class UTexture2D;
-class UWidgetComponent;
 
-/* Shows the live study pad image on a world-space widget */
+/* Shows the live study pad image on the owner's static mesh */
 UCLASS()
 class MEMORYPALACE_API UStudyWhiteboardComponent
-	: public USceneComponent
+	: public UActorComponent
 {
 	GENERATED_BODY()
 
@@ -23,7 +22,7 @@ public:
 	UStudyWhiteboardComponent();
 
 protected:
-	/* Creates the widget and listens for new images */
+	/* Creates the material and listens for new images */
 	virtual void BeginPlay() override;
 
 	/* Stops listening for new images */
@@ -31,26 +30,23 @@ protected:
 		const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	/* Creates and attaches the world-space widget component */
-	void CreateWidgetComponent();
+	/* Replaces the owner's first mesh material with a dynamic
+	   instance */
+	void CreateWhiteboardMaterial();
 
 	/* Subscribes to the image subsystem and shows its image */
 	void BindToImageSubsystem();
 
-	/* Shows a newly received image on the widget */
+	/* Applies a newly received image to the material */
 	void HandleImageReceived(UTexture2D* ReceivedTexture);
 
-	/* Widget class displayed on the whiteboard */
+	/* Name of the material's texture parameter to set */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Whiteboard")
-	TSubclassOf<UStudyWhiteboardWidget> WidgetClass;
+	FName TextureParameterName;
 
-	/* Size in pixels the widget is drawn at */
-	UPROPERTY(EditDefaultsOnly, Category = "Custom|Whiteboard")
-	FVector2D WidgetDrawSize;
-
-	/* Widget component created when play begins */
+	/* Dynamic material that displays the whiteboard image */
 	UPROPERTY()
-	TObjectPtr<UWidgetComponent> WidgetComponent;
+	TObjectPtr<UMaterialInstanceDynamic> WhiteboardMaterial;
 
 	// Cached Vars
 	/* Subsystem this component is subscribed to */

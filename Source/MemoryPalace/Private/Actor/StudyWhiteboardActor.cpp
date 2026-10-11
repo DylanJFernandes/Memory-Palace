@@ -15,5 +15,4 @@ AStudyWhiteboardActor::AStudyWhiteboardActor()
 	WhiteboardComponent =
 		CreateDefaultSubobject<UStudyWhiteboardComponent>(
 			TEXT("WhiteboardComponent"));
-	WhiteboardComponent->SetupAttachment(WhiteboardMesh);
 }
