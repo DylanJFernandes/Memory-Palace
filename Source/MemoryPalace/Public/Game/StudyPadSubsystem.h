@@ -6,7 +6,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Data/StudyReviewResult.h"
-#include "StudyPadImageSubsystem.generated.h"
+#include "StudyPadSubsystem.generated.h"
 
 class FJsonObject;
 class UTexture2D;
@@ -37,14 +37,14 @@ enum class EStudyReviewStatus : uint8
 /* Polls the study pad server for the live whiteboard image and
    the AI's review while a game world is running */
 UCLASS()
-class MEMORYPALACE_API UStudyPadImageSubsystem
+class MEMORYPALACE_API UStudyPadSubsystem
 	: public UWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
 	/* Sets default values for this subsystem */
-	UStudyPadImageSubsystem();
+	UStudyPadSubsystem();
 
 	/* Returns the newest image, or null if none arrived yet */
 	UTexture2D* GetLatestTexture() const;

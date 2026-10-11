@@ -7,7 +7,7 @@
 #include "StudyWhiteboardComponent.generated.h"
 
 class UMaterialInstanceDynamic;
-class UStudyPadImageSubsystem;
+class UStudyPadSubsystem;
 class UTexture2D;
 
 /* Shows the live study pad image on the owner's static mesh */
@@ -50,5 +50,5 @@ private:
 
 	// Cached Vars
 	/* Subsystem this component is subscribed to */
-	TWeakObjectPtr<UStudyPadImageSubsystem> CachedImageSubsystem;
+	TWeakObjectPtr<UStudyPadSubsystem> CachedImageSubsystem;
 };

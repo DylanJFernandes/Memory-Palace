@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "Game/StudyPadImageSubsystem.h"
+#include "Game/StudyPadSubsystem.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
@@ -24,14 +24,14 @@ namespace
 	constexpr int32 HttpStatusOk{200};
 }
 
-UStudyPadImageSubsystem::UStudyPadImageSubsystem()
+UStudyPadSubsystem::UStudyPadSubsystem()
 	: bIsImageRequestInFlight{false}
 	, bIsResultRequestInFlight{false}
 	, CurrentReviewStatus{EStudyReviewStatus::Idle}
 {
 }
 
-bool UStudyPadImageSubsystem::ShouldCreateSubsystem(
+bool UStudyPadSubsystem::ShouldCreateSubsystem(
 	UObject* Outer) const
 {
 	const UWorld* World{Cast<UWorld>(Outer)};
@@ -42,21 +42,21 @@ bool UStudyPadImageSubsystem::ShouldCreateSubsystem(
 	return Super::ShouldCreateSubsystem(Outer);
 }
 
-void UStudyPadImageSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+void UStudyPadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	FTimerManager& TimerManager{InWorld.GetTimerManager()};
 	TimerManager.SetTimer(
 		ImagePollTimerHandle, this,
-		&UStudyPadImageSubsystem::RequestLatestImage,
+		&UStudyPadSubsystem::RequestLatestImage,
 		ImagePollIntervalSeconds, true);
 	TimerManager.SetTimer(
 		ResultPollTimerHandle, this,
-		&UStudyPadImageSubsystem::RequestLatestResult,
+		&UStudyPadSubsystem::RequestLatestResult,
 		ResultPollIntervalSeconds, true);
 }
 
-void UStudyPadImageSubsystem::RequestLatestImage()
+void UStudyPadSubsystem::RequestLatestImage()
 {
 	if (bIsImageRequestInFlight)
 	{
@@ -66,12 +66,12 @@ void UStudyPadImageSubsystem::RequestLatestImage()
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		CreateGetRequest(LatestImagePath)};
 	Request->OnProcessRequestComplete().BindUObject(
-		this, &UStudyPadImageSubsystem::HandleImageResponse);
+		this, &UStudyPadSubsystem::HandleImageResponse);
 	Request->ProcessRequest();
 }
 
 TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
-	UStudyPadImageSubsystem::CreateGetRequest(const TCHAR* Path)
+	UStudyPadSubsystem::CreateGetRequest(const TCHAR* Path)
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		FHttpModule::Get().CreateRequest()};
@@ -80,7 +80,7 @@ TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
 	return Request;
 }
 
-void UStudyPadImageSubsystem::HandleImageResponse(
+void UStudyPadSubsystem::HandleImageResponse(
 	FHttpRequestPtr Request, FHttpResponsePtr Response,
 	bool bConnectedSuccessfully)
 {
@@ -96,7 +96,7 @@ void UStudyPadImageSubsystem::HandleImageResponse(
 	PublishImage(Response->GetContent());
 }
 
-void UStudyPadImageSubsystem::PublishImage(
+void UStudyPadSubsystem::PublishImage(
 	const TArray<uint8>& ImageBytes)
 {
 	UTexture2D* ImportedTexture{
@@ -109,7 +109,7 @@ void UStudyPadImageSubsystem::PublishImage(
 	OnImageReceived.ExecuteIfBound(LatestTexture);
 }
 
-void UStudyPadImageSubsystem::RequestLatestResult()
+void UStudyPadSubsystem::RequestLatestResult()
 {
 	if (bIsResultRequestInFlight)
 	{
@@ -119,11 +119,11 @@ void UStudyPadImageSubsystem::RequestLatestResult()
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		CreateGetRequest(LatestResultPath)};
 	Request->OnProcessRequestComplete().BindUObject(
-		this, &UStudyPadImageSubsystem::HandleResultResponse);
+		this, &UStudyPadSubsystem::HandleResultResponse);
 	Request->ProcessRequest();
 }
 
-void UStudyPadImageSubsystem::HandleResultResponse(
+void UStudyPadSubsystem::HandleResultResponse(
 	FHttpRequestPtr Request, FHttpResponsePtr Response,
 	bool bConnectedSuccessfully)
 {
@@ -147,7 +147,7 @@ void UStudyPadImageSubsystem::HandleResultResponse(
 	ApplyServerStatus(*ResultObject);
 }
 
-void UStudyPadImageSubsystem::HandleResultUnavailable()
+void UStudyPadSubsystem::HandleResultUnavailable()
 {
 	if (CurrentReviewStatus != EStudyReviewStatus::Reviewing)
 	{
@@ -158,7 +158,7 @@ void UStudyPadImageSubsystem::HandleResultUnavailable()
 		TEXT("Lost contact with the study pad server."));
 }
 
-void UStudyPadImageSubsystem::ApplyServerStatus(
+void UStudyPadSubsystem::ApplyServerStatus(
 	const FJsonObject& ResultObject)
 {
 	FString StatusText;
@@ -172,7 +172,7 @@ void UStudyPadImageSubsystem::ApplyServerStatus(
 	BroadcastStatusChange(ResultObject);
 }
 
-EStudyReviewStatus UStudyPadImageSubsystem::ParseStatus(
+EStudyReviewStatus UStudyPadSubsystem::ParseStatus(
 	const FString& StatusText)
 {
 	if (StatusText == TEXT("reviewing"))
@@ -190,7 +190,7 @@ EStudyReviewStatus UStudyPadImageSubsystem::ParseStatus(
 	return EStudyReviewStatus::Idle;
 }
 
-void UStudyPadImageSubsystem::BroadcastStatusChange(
+void UStudyPadSubsystem::BroadcastStatusChange(
 	const FJsonObject& ResultObject)
 {
 	switch (CurrentReviewStatus)
@@ -211,12 +211,12 @@ void UStudyPadImageSubsystem::BroadcastStatusChange(
 	}
 }
 
-UTexture2D* UStudyPadImageSubsystem::GetLatestTexture() const
+UTexture2D* UStudyPadSubsystem::GetLatestTexture() const
 {
 	return LatestTexture;
 }
 
-void UStudyPadImageSubsystem::Deinitialize()
+void UStudyPadSubsystem::Deinitialize()
 {
 	if (UWorld* World{GetWorld()})
 	{

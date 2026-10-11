@@ -3,7 +3,7 @@
 #include "Component/StudyWhiteboardComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Texture2D.h"
-#include "Game/StudyPadImageSubsystem.h"
+#include "Game/StudyPadSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 namespace
@@ -39,8 +39,8 @@ void UStudyWhiteboardComponent::CreateWhiteboardMaterial()
 
 void UStudyWhiteboardComponent::BindToImageSubsystem()
 {
-	UStudyPadImageSubsystem* ImageSubsystem{
-		GetWorld()->GetSubsystem<UStudyPadImageSubsystem>()};
+	UStudyPadSubsystem* ImageSubsystem{
+		GetWorld()->GetSubsystem<UStudyPadSubsystem>()};
 	if (!ImageSubsystem)
 	{
 		return;
