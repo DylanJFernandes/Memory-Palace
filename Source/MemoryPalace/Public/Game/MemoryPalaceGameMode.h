@@ -6,17 +6,17 @@
 #include "GameFramework/GameModeBase.h"
 #include "MemoryPalaceGameMode.generated.h"
 
-/**
- *  Simple GameMode for a first person game
- */
+/* Game mode that owns the rules of a study world */
 UCLASS(abstract)
 class AMemoryPalaceGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
 public:
+	/* Sets default values for this game mode */
 	AMemoryPalaceGameMode();
+
+protected:
+	/* Starts the study pad polling for this world */
+	virtual void BeginPlay() override;
 };
-
-
-
