@@ -854,6 +854,46 @@ is instant, so there's no cost to making one per feature.
    git merge main
    ```
 
+## 2a. The `integration` Branch — Testing Unfinished Work Together
+
+`integration` sits between the feature branches and `main`. It
+holds both people's in-progress features so they can be tested
+together before either is ready for `main`.
+
+```
+main
+└── integration        Throwaway test bed for combined WIP
+    ├── dylan
+    │   └── feature/study-pad
+    └── ethan
+        └── feature/castle-level
+```
+
+Rules:
+
+- **Never commit directly to `integration`.** It only receives
+  merges (`--no-ff`) from feature branches and from `main`.
+- **Never merge `integration` into `main`** and never branch a
+  feature off it. It contains the other person's unfinished
+  work. Finished features go feature → personal branch → `main`
+  as in Section 2.
+- **Keep working on your own feature branch.** To retest the
+  combination:
+  ```
+  git checkout integration
+  git merge --no-ff feature/study-pad
+  git merge --no-ff origin/feature/castle-level
+  ```
+- **Keep it current:** merge `main` into `integration` when
+  `main` moves.
+- **Resolve conflicts on `integration`**, not on the feature
+  branches. Unreal assets (`.uasset`, `.umap`) are binary and do
+  not merge; if both people changed the same asset, one person
+  redoes their change by hand.
+- **If it gets messy, delete and rebuild it** from `main` plus
+  the current feature branches. Nothing lives only on it.
+- Push it to `origin` so both people can pull and test.
+
 ## 3. Rebasing — Use Sparingly, and Only Locally
 
 Pro Git's rule, stated plainly: **never rebase a branch that
