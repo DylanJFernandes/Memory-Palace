@@ -13,6 +13,7 @@ namespace
 
 UStudyWhiteboardComponent::UStudyWhiteboardComponent()
 	: TextureParameterName{TEXT("WhiteboardTexture")}
+	, InitialMeshScale{FVector::OneVector}
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -21,7 +22,7 @@ void UStudyWhiteboardComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	CreateWhiteboardMaterial();
-	BindToImageSubsystem();
+	BindToStudyPadSubsystem();
 }
 
 void UStudyWhiteboardComponent::CreateWhiteboardMaterial()
@@ -32,42 +33,59 @@ void UStudyWhiteboardComponent::CreateWhiteboardMaterial()
 	{
 		return;
 	}
+	CachedWhiteboardMesh = WhiteboardMesh;
+	InitialMeshScale = WhiteboardMesh->GetRelativeScale3D();
 	WhiteboardMaterial =
 		WhiteboardMesh->CreateAndSetMaterialInstanceDynamic(
 			WhiteboardMaterialSlotIndex);
 }
 
-void UStudyWhiteboardComponent::BindToImageSubsystem()
+void UStudyWhiteboardComponent::BindToStudyPadSubsystem()
 {
-	UStudyPadSubsystem* ImageSubsystem{
+	UStudyPadSubsystem* StudyPadSubsystem{
 		GetWorld()->GetSubsystem<UStudyPadSubsystem>()};
-	if (!ImageSubsystem)
+	if (!StudyPadSubsystem)
 	{
 		return;
 	}
-	CachedImageSubsystem = ImageSubsystem;
-	ImageSubsystem->OnImageReceived.BindUObject(
-		this, &UStudyWhiteboardComponent::HandleImageReceived);
-	HandleImageReceived(ImageSubsystem->GetLatestTexture());
+	CachedStudyPadSubsystem = StudyPadSubsystem;
+	StudyPadSubsystem->OnWorkImageUpdated.AddUObject(
+		this, &UStudyWhiteboardComponent::HandleWorkImageUpdated);
+	HandleWorkImageUpdated(
+		StudyPadSubsystem->GetLatestTexture(),
+		StudyPadSubsystem->GetLatestAspectRatio());
 }
 
-void UStudyWhiteboardComponent::HandleImageReceived(
-	UTexture2D* ReceivedTexture)
+void UStudyWhiteboardComponent::HandleWorkImageUpdated(
+	UTexture2D* WorkTexture, float AspectRatio)
 {
-	if (!ReceivedTexture || !WhiteboardMaterial)
+	if (!WorkTexture || !WhiteboardMaterial)
 	{
 		return;
 	}
 	WhiteboardMaterial->SetTextureParameterValue(
-		TextureParameterName, ReceivedTexture);
+		TextureParameterName, WorkTexture);
+	ApplyAspectRatio(AspectRatio);
+}
+
+void UStudyWhiteboardComponent::ApplyAspectRatio(
+	float AspectRatio)
+{
+	if (!CachedWhiteboardMesh.IsValid())
+	{
+		return;
+	}
+	FVector NewScale{InitialMeshScale};
+	NewScale.Y = InitialMeshScale.Z * AspectRatio;
+	CachedWhiteboardMesh->SetRelativeScale3D(NewScale);
 }
 
 void UStudyWhiteboardComponent::EndPlay(
 	const EEndPlayReason::Type EndPlayReason)
 {
-	if (CachedImageSubsystem.IsValid())
+	if (CachedStudyPadSubsystem.IsValid())
 	{
-		CachedImageSubsystem->OnImageReceived.Unbind();
+		CachedStudyPadSubsystem->OnWorkImageUpdated.RemoveAll(this);
 	}
 	Super::EndPlay(EndPlayReason);
 }
