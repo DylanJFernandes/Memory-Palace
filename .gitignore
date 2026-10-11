@@ -80,3 +80,5 @@ MemoryPalace.slnx
 .idea/
 .claude/settings.local.json
 *.blend1
+__pycache__/
+*.pyc
