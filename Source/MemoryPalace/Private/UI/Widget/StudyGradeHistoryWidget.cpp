@@ -73,7 +73,8 @@ void UStudyGradeHistoryWidget::HandlePreviousClicked()
 void UStudyGradeHistoryWidget::HandleNextClicked()
 {
 	const int32 LastPageIndex{FMath::Max(Submissions.Num() - 1, 0)};
-	CurrentPageIndex = FMath::Min(CurrentPageIndex + 1, LastPageIndex);
+	CurrentPageIndex =
+		FMath::Min(CurrentPageIndex + 1, LastPageIndex);
 	RefreshPage();
 }
 
