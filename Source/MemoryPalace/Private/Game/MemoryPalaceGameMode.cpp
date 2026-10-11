@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "Game/StudyGameState.h"
 #include "Game/StudyPadSubsystem.h"
+#include "Game/StudyProgressSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "Player/StudyPlayerState.h"
 
@@ -17,9 +18,26 @@ AMemoryPalaceGameMode::AMemoryPalaceGameMode()
 	PlayerStateClass = AStudyPlayerState::StaticClass();
 }
 
+void AMemoryPalaceGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	AStudyPlayerState* StudyPlayerState{
+		NewPlayer->GetPlayerState<AStudyPlayerState>()};
+	UStudyProgressSubsystem* ProgressSubsystem{
+		GetWorld()->GetSubsystem<UStudyProgressSubsystem>()};
+	if (!StudyPlayerState || !ProgressSubsystem)
+	{
+		return;
+	}
+	ProgressSubsystem->RestoreExperience(*StudyPlayerState);
+	UnlockEligibleSections();
+}
+
 void AMemoryPalaceGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	CachedProgressSubsystem =
+		GetWorld()->GetSubsystem<UStudyProgressSubsystem>();
 	UnlockStartingSections();
 	BindToStudyPadSubsystem();
 }
@@ -31,6 +49,7 @@ void AMemoryPalaceGameMode::StartProblem(const FString& ProblemId)
 		return;
 	}
 	RewardedPartKeysInAttempt.Empty();
+	SaveBoardsToDisk();
 	CachedStudyPadSubsystem->StartProblem(ProblemId);
 	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
 	if (!StudyGameState)
@@ -83,24 +102,48 @@ void AMemoryPalaceGameMode::BindToStudyPadSubsystem()
 void AMemoryPalaceGameMode::HandleReviewFinished(
 	const FStudyReviewResult& ReviewResult)
 {
-	AwardExperience(ReviewResult);
+	const int32 ExperienceGained{AwardExperience(ReviewResult)};
 	UnlockEligibleSections();
+	SaveProgress(ReviewResult, ExperienceGained);
 }
 
-void AMemoryPalaceGameMode::AwardExperience(
+void AMemoryPalaceGameMode::SaveBoardsToDisk() const
+{
+	if (!CachedProgressSubsystem.IsValid())
+	{
+		return;
+	}
+	CachedProgressSubsystem->SaveToDisk();
+}
+
+void AMemoryPalaceGameMode::SaveProgress(
+	const FStudyReviewResult& ReviewResult, int32 ExperienceGained)
+{
+	const AStudyPlayerState* StudyPlayerState{GetStudyPlayerState()};
+	if (!CachedProgressSubsystem.IsValid() || !StudyPlayerState)
+	{
+		return;
+	}
+	CachedProgressSubsystem->RecordSubmission(
+		ReviewResult, ExperienceGained);
+	CachedProgressSubsystem->StoreExperience(*StudyPlayerState);
+	CachedProgressSubsystem->SaveToDisk();
+}
+
+int32 AMemoryPalaceGameMode::AwardExperience(
 	const FStudyReviewResult& ReviewResult)
 {
 	AStudyPlayerState* StudyPlayerState{GetStudyPlayerState()};
 	if (!StudyPlayerState || ReviewResult.Parts.IsEmpty())
 	{
-		return;
+		return 0;
 	}
 	const double EarnedExperience{
 		ClaimCorrectPartsExperience(ReviewResult, *StudyPlayerState)};
 	const int64 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
 	if (ExperienceAmount <= 0)
 	{
-		return;
+		return 0;
 	}
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Subject,
@@ -108,6 +151,7 @@ void AMemoryPalaceGameMode::AwardExperience(
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Section,
 		ReviewResult.GetSectionTopicName(), ExperienceAmount);
+	return static_cast<int32>(ExperienceAmount);
 }
 
 double AMemoryPalaceGameMode::ClaimCorrectPartsExperience(

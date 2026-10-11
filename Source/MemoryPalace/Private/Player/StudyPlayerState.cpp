@@ -36,6 +36,47 @@ TOptional<FDateTime> AStudyPlayerState::GetLastPartAwardTime(
 	return *AwardTime;
 }
 
+TMap<FName, int32> AStudyPlayerState::GetTopicExperience(
+	EStudyTopicKind TopicKind) const
+{
+	const TMap<FName, int32>* TopicExperience{
+		ExperienceByKind.Find(TopicKind)};
+	if (!TopicExperience)
+	{
+		return TMap<FName, int32>{};
+	}
+	return *TopicExperience;
+}
+
+const TMap<FString, FDateTime>&
+	AStudyPlayerState::GetPartAwardTimes() const
+{
+	return LastAwardTimeByPartKey;
+}
+
+void AStudyPlayerState::RestoreProgress(
+	const TMap<FName, int32>& SubjectExperience,
+	const TMap<FName, int32>& SectionExperience,
+	const TMap<FString, FDateTime>& PartAwardTimes)
+{
+	ExperienceByKind.Add(EStudyTopicKind::Subject, SubjectExperience);
+	ExperienceByKind.Add(EStudyTopicKind::Section, SectionExperience);
+	LastAwardTimeByPartKey = PartAwardTimes;
+}
+
+void AStudyPlayerState::AnnounceAllExperience() const
+{
+	for (const TPair<EStudyTopicKind, TMap<FName, int32>>& Kind :
+		 ExperienceByKind)
+	{
+		for (const TPair<FName, int32>& Topic : Kind.Value)
+		{
+			OnExperienceChanged.ExecuteIfBound(
+				Kind.Key, Topic.Key, Topic.Value);
+		}
+	}
+}
+
 int32 AStudyPlayerState::GetExperience(
 	EStudyTopicKind TopicKind, FName TopicName) const
 {

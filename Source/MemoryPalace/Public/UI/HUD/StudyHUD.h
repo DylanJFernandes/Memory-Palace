@@ -43,7 +43,8 @@ private:
 	/* Shows that a review is under way */
 	void HandleReviewStarted();
 
-	/* Shows the finished review */
+	/* Hides the reviewing message, since the result is shown on
+	   the history board */
 	void HandleReviewFinished(const FStudyReviewResult& ReviewResult);
 
 	/* Shows why the review failed */

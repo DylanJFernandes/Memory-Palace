@@ -1,9 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Game/StudyPadSubsystem.h"
+#include "Data/StudyProgressSaveGame.h"
+#include "Data/StudyServerAddress.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
+#include "Game/StudyProgressSubsystem.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "HttpModule.h"
 #include "ImageUtils.h"
@@ -15,8 +18,6 @@
 
 namespace
 {
-	constexpr const TCHAR* ServerBaseUrl{
-		TEXT("http://127.0.0.1:3000")};
 	constexpr const TCHAR* LatestImagePath{
 		TEXT("/latest.png")};
 	constexpr const TCHAR* LatestResultPath{
@@ -32,6 +33,7 @@ namespace
 	constexpr float ImagePollIntervalSeconds{1.0f};
 	constexpr float ResultPollIntervalSeconds{0.7f};
 	constexpr int32 HttpStatusOk{200};
+	const FString ProblemIdHeaderName{TEXT("X-Problem-Id")};
 }
 
 UStudyPadSubsystem::UStudyPadSubsystem()
@@ -40,8 +42,6 @@ UStudyPadSubsystem::UStudyPadSubsystem()
 	, bIsResultRequestInFlight{false}
 	, bHasPolledResult{false}
 	, CurrentReviewStatus{EStudyReviewStatus::Idle}
-	, LastImageChecksum{0}
-	, LatestAspectRatio{1.0f}
 {
 }
 
@@ -54,6 +54,39 @@ bool UStudyPadSubsystem::ShouldCreateSubsystem(
 		return false;
 	}
 	return Super::ShouldCreateSubsystem(Outer);
+}
+
+void UStudyPadSubsystem::Initialize(
+	FSubsystemCollectionBase& Collection)
+{
+	Collection.InitializeDependency<UStudyProgressSubsystem>();
+	Super::Initialize(Collection);
+	CachedProgressSubsystem =
+		GetWorld()->GetSubsystem<UStudyProgressSubsystem>();
+	LoadSavedBoards();
+}
+
+void UStudyPadSubsystem::LoadSavedBoards()
+{
+	if (!CachedProgressSubsystem.IsValid())
+	{
+		return;
+	}
+	for (const TPair<FString, FStudySavedProblem>& Problem :
+		 CachedProgressSubsystem->GetProblems())
+	{
+		const TArray<uint8>& PngBytes{
+			Problem.Value.BoardImagePngBytes};
+		UTexture2D* SavedTexture{
+			FImageUtils::ImportBufferAsTexture2D(PngBytes)};
+		if (!SavedTexture)
+		{
+			continue;
+		}
+		ProblemTextures.Add(Problem.Key, SavedTexture);
+		LastImageChecksums.Add(Problem.Key, FCrc::MemCrc32(
+			PngBytes.GetData(), PngBytes.Num()));
+	}
 }
 
 void UStudyPadSubsystem::StartPolling()
@@ -98,7 +131,7 @@ TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		FHttpModule::Get().CreateRequest()};
-	Request->SetURL(FString{ServerBaseUrl} + Path);
+	Request->SetURL(FString{StudyServerBaseUrl} + Path);
 	Request->SetVerb(Verb);
 	return Request;
 }
@@ -116,15 +149,22 @@ void UStudyPadSubsystem::HandleImageResponse(
 	{
 		return;
 	}
-	PublishImage(Response->GetContent());
+	const FString ProblemId{
+		Response->GetHeader(ProblemIdHeaderName)};
+	if (ProblemId.IsEmpty())
+	{
+		return;
+	}
+	PublishImage(ProblemId, Response->GetContent());
 }
 
 void UStudyPadSubsystem::PublishImage(
-	const TArray<uint8>& ImageBytes)
+	const FString& ProblemId, const TArray<uint8>& ImageBytes)
 {
 	const uint32 Checksum{
 		FCrc::MemCrc32(ImageBytes.GetData(), ImageBytes.Num())};
-	if (LatestTexture && Checksum == LastImageChecksum)
+	const uint32* LastChecksum{LastImageChecksums.Find(ProblemId)};
+	if (LastChecksum && *LastChecksum == Checksum)
 	{
 		return;
 	}
@@ -134,11 +174,16 @@ void UStudyPadSubsystem::PublishImage(
 	{
 		return;
 	}
-	LastImageChecksum = Checksum;
-	LatestTexture = ImportedTexture;
-	LatestAspectRatio = static_cast<float>(
-		ImportedTexture->GetSizeX()) / ImportedTexture->GetSizeY();
-	OnWorkImageUpdated.Broadcast(LatestTexture, LatestAspectRatio);
+	LastImageChecksums.Add(ProblemId, Checksum);
+	ProblemTextures.Add(ProblemId, ImportedTexture);
+	if (CachedProgressSubsystem.IsValid())
+	{
+		CachedProgressSubsystem->SetBoardImage(ProblemId, ImageBytes);
+	}
+	const float AspectRatio{static_cast<float>(
+		ImportedTexture->GetSizeX()) / ImportedTexture->GetSizeY()};
+	OnWorkImageUpdated.Broadcast(
+		ProblemId, ImportedTexture, AspectRatio);
 }
 
 void UStudyPadSubsystem::RequestLatestResult()
@@ -339,14 +384,12 @@ EStudyReviewStatus UStudyPadSubsystem::ParseStatus(
 	return EStudyReviewStatus::Idle;
 }
 
-UTexture2D* UStudyPadSubsystem::GetLatestTexture() const
+UTexture2D* UStudyPadSubsystem::GetTextureForProblem(
+	const FString& ProblemId) const
 {
-	return LatestTexture;
-}
-
-float UStudyPadSubsystem::GetLatestAspectRatio() const
-{
-	return LatestAspectRatio;
+	const TObjectPtr<UTexture2D>* FoundTexture{
+		ProblemTextures.Find(ProblemId)};
+	return FoundTexture ? FoundTexture->Get() : nullptr;
 }
 
 void UStudyPadSubsystem::EndProblem()

@@ -9,12 +9,15 @@
 #include "StudyPadSubsystem.generated.h"
 
 class FJsonObject;
+class UStudyProgressSubsystem;
 class UTexture2D;
 
-/* Fires with the newest whiteboard image and its width over
-   height; multicast because every whiteboard listens */
-DECLARE_MULTICAST_DELEGATE_TwoParams(FStudyWorkImageUpdated,
-									 UTexture2D*, float);
+/* Fires with a problem's id, its newest whiteboard image and the
+   image's width over height; multicast because every whiteboard
+   listens */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FStudyWorkImageUpdated,
+									   const FString&, UTexture2D*,
+									   float);
 
 /* Fires when the student submitted and the AI began reviewing;
    multicast because the HUD and the game mode both listen */
@@ -64,11 +67,10 @@ public:
 	/* Asks the server for a hint about the active problem */
 	void RequestHint();
 
-	/* Returns the newest image, or null if none arrived yet */
-	UTexture2D* GetLatestTexture() const;
-
-	/* Returns the newest image's width over height */
-	float GetLatestAspectRatio() const;
+	/* Returns the newest image of a problem, or null if none
+	   arrived yet */
+	UTexture2D* GetTextureForProblem(
+		const FString& ProblemId) const;
 
 	/* Fires whenever a new image has been downloaded */
 	FStudyWorkImageUpdated OnWorkImageUpdated;
@@ -90,6 +92,10 @@ protected:
 	virtual bool ShouldCreateSubsystem(
 		UObject* Outer) const override;
 
+	/* Shows the boards saved from earlier sessions */
+	virtual void Initialize(
+		FSubsystemCollectionBase& Collection) override;
+
 	/* Stops polling when the world is torn down */
 	virtual void Deinitialize() override;
 
@@ -97,6 +103,9 @@ private:
 	/* Tells the server the game is closing, which ends the
 	   active problem */
 	void EndProblem();
+
+	/* Turns each saved board PNG into the problem's texture */
+	void LoadSavedBoards();
 
 	/* Sends a request for the latest image unless one is
 	   already waiting for a response */
@@ -108,8 +117,9 @@ private:
 							 bool bConnectedSuccessfully);
 
 	/* Decodes the PNG bytes and notifies listeners unless the
-	   image is the same as the last one */
-	void PublishImage(const TArray<uint8>& ImageBytes);
+	   image is the same as the problem's last one */
+	void PublishImage(const FString& ProblemId,
+					  const TArray<uint8>& ImageBytes);
 
 	/* Sends a request for the latest review unless one is
 	   already waiting for a response */
@@ -181,11 +191,12 @@ private:
 	/* Key of the last finished or failed review announced */
 	FString LastHandledResultKey;
 
-	/* Checksum of the last image that was decoded */
-	uint32 LastImageChecksum;
+	/* Checksum of the last image decoded for each problem */
+	TMap<FString, uint32> LastImageChecksums;
 
-	/* Width over height of the newest image */
-	float LatestAspectRatio;
+	// Cached Vars
+	/* Subsystem that remembers each board for saving */
+	TWeakObjectPtr<UStudyProgressSubsystem> CachedProgressSubsystem;
 
 	/* Timer that triggers each image poll */
 	FTimerHandle ImagePollTimerHandle;
@@ -193,7 +204,8 @@ private:
 	/* Timer that triggers each result poll */
 	FTimerHandle ResultPollTimerHandle;
 
-	/* Most recent decoded image, kept alive for listeners */
+	/* Most recent decoded image of each problem, kept alive for
+	   listeners */
 	UPROPERTY()
-	TObjectPtr<UTexture2D> LatestTexture;
+	TMap<FString, TObjectPtr<UTexture2D>> ProblemTextures;
 };

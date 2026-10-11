@@ -39,6 +39,25 @@ public:
 	TOptional<FDateTime> GetLastPartAwardTime(
 		const FString& PartKey) const;
 
+	/* Returns the experience earned in every topic of a kind */
+	TMap<FName, int32> GetTopicExperience(
+		EStudyTopicKind TopicKind) const;
+
+	/* Returns when each part of each problem last earned
+	   experience */
+	const TMap<FString, FDateTime>& GetPartAwardTimes() const;
+
+	/* Replaces the earned experience and award times with saved
+	   ones, without announcing them */
+	void RestoreProgress(
+		const TMap<FName, int32>& SubjectExperience,
+		const TMap<FName, int32>& SectionExperience,
+		const TMap<FString, FDateTime>& PartAwardTimes);
+
+	/* Announces the experience of every topic, so a listener that
+	   bound late can catch up */
+	void AnnounceAllExperience() const;
+
 	/* Fires whenever a topic gains experience */
 	FStudyExperienceChanged OnExperienceChanged;
 

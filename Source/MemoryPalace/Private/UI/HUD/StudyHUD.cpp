@@ -76,6 +76,7 @@ void AStudyHUD::BindToPlayerState()
 	CachedStudyPlayerState = StudyPlayerState;
 	StudyPlayerState->OnExperienceChanged.BindUObject(
 		this, &AStudyHUD::HandleExperienceChanged);
+	StudyPlayerState->AnnounceAllExperience();
 }
 
 void AStudyHUD::HandleReviewStarted()
@@ -94,7 +95,7 @@ void AStudyHUD::HandleReviewFinished(
 	{
 		return;
 	}
-	FeedbackWidget->ShowResult(ReviewResult);
+	FeedbackWidget->Hide();
 }
 
 void AStudyHUD::HandleReviewFailed(const FString& ErrorMessage)
