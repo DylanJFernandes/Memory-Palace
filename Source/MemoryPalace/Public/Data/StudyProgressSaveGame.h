@@ -64,6 +64,10 @@ struct FStudySavedSubmission
 	/* Verdict for each part of the problem */
 	UPROPERTY(SaveGame)
 	TArray<FStudySavedPart> Parts;
+
+	/* PNG of the whiteboard as it was when this was submitted */
+	UPROPERTY(SaveGame)
+	TArray<uint8> BoardImagePngBytes;
 };
 
 /* Everything saved about one problem */

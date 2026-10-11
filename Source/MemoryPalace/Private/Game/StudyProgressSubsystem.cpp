@@ -51,11 +51,14 @@ void UStudyProgressSubsystem::RecordSubmission(
 {
 	FStudySavedProblem& Problem{
 		ProgressSave->Problems.FindOrAdd(ReviewResult.ProblemId)};
-	Problem.Submissions.Add(
-		BuildSubmission(ReviewResult, ExperienceGained));
+	FStudySavedSubmission Submission{
+		BuildSubmission(ReviewResult, ExperienceGained)};
+	Submission.BoardImagePngBytes = Problem.BoardImagePngBytes;
+	Problem.Submissions.Add(MoveTemp(Submission));
 	Problem.SubjectName = ReviewResult.SubjectName;
 	Problem.SectionName = ReviewResult.SectionName;
 	Problem.bIsSolved = Problem.bIsSolved || ReviewResult.bIsCorrect;
+	OnSubmissionRecorded.Broadcast(ReviewResult.ProblemId);
 }
 
 FStudySavedSubmission UStudyProgressSubsystem::BuildSubmission(

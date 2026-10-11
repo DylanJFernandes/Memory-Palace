@@ -12,6 +12,10 @@ struct FStudyReviewResult;
 struct FStudySavedProblem;
 struct FStudySavedSubmission;
 
+/* Broadcast with the problem id after a submission is saved */
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FStudySubmissionRecorded, const FString&);
+
 /* Keeps the student's saved progress for this world: boards,
    submission history and experience */
 UCLASS()
@@ -41,6 +45,9 @@ public:
 
 	/* Returns the saved data of each problem, by problem id */
 	const TMap<FString, FStudySavedProblem>& GetProblems() const;
+
+	/* Fires after a graded submission is added to a problem */
+	FStudySubmissionRecorded OnSubmissionRecorded;
 
 protected:
 	/* Creates the subsystem only for game worlds */
