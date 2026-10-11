@@ -9,6 +9,7 @@
 #include "StudyPadSubsystem.generated.h"
 
 class FJsonObject;
+class UStudyProgressSubsystem;
 class UTexture2D;
 
 /* Fires with a problem's id, its newest whiteboard image and the
@@ -91,6 +92,10 @@ protected:
 	virtual bool ShouldCreateSubsystem(
 		UObject* Outer) const override;
 
+	/* Shows the boards saved from earlier sessions */
+	virtual void Initialize(
+		FSubsystemCollectionBase& Collection) override;
+
 	/* Stops polling when the world is torn down */
 	virtual void Deinitialize() override;
 
@@ -98,6 +103,9 @@ private:
 	/* Tells the server the game is closing, which ends the
 	   active problem */
 	void EndProblem();
+
+	/* Turns each saved board PNG into the problem's texture */
+	void LoadSavedBoards();
 
 	/* Sends a request for the latest image unless one is
 	   already waiting for a response */
@@ -185,6 +193,10 @@ private:
 
 	/* Checksum of the last image decoded for each problem */
 	TMap<FString, uint32> LastImageChecksums;
+
+	// Cached Vars
+	/* Subsystem that remembers each board for saving */
+	TWeakObjectPtr<UStudyProgressSubsystem> CachedProgressSubsystem;
 
 	/* Timer that triggers each image poll */
 	FTimerHandle ImagePollTimerHandle;

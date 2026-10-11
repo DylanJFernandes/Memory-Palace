@@ -11,6 +11,7 @@ class AStudyGameState;
 class AStudyPlayerState;
 class UStudyCurriculumDataAsset;
 class UStudyPadSubsystem;
+class UStudyProgressSubsystem;
 struct FStudySectionDefinition;
 
 /* Game mode that owns the rules of a study world */
@@ -31,6 +32,9 @@ public:
 	void RequestHint();
 
 protected:
+	/* Gives a joining player the progress saved for this world */
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+
 	/* Listens for reviews and starts the study pad polling */
 	virtual void BeginPlay() override;
 
@@ -49,8 +53,17 @@ private:
 	void HandleReviewFinished(const FStudyReviewResult& ReviewResult);
 
 	/* Gives experience for the correct parts to the review's
-	   subject and section, even if other parts were wrong */
-	void AwardExperience(const FStudyReviewResult& ReviewResult);
+	   subject and section, even if other parts were wrong, and
+	   returns the amount given */
+	int32 AwardExperience(const FStudyReviewResult& ReviewResult);
+
+	/* Saves the boards as they are now, before the student
+	   moves to another problem */
+	void SaveBoardsToDisk() const;
+
+	/* Saves the submission, the experience and the boards */
+	void SaveProgress(const FStudyReviewResult& ReviewResult,
+					  int32 ExperienceGained);
 
 	/* Adds up the experience of the correct parts and records
 	   when each one was rewarded */
@@ -99,4 +112,7 @@ private:
 	// Cached Vars
 	/* Subsystem this game mode is listening to */
 	TWeakObjectPtr<UStudyPadSubsystem> CachedStudyPadSubsystem;
+
+	/* Subsystem holding this world's saved progress */
+	TWeakObjectPtr<UStudyProgressSubsystem> CachedProgressSubsystem;
 };

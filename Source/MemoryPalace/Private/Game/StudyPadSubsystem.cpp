@@ -1,9 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Game/StudyPadSubsystem.h"
+#include "Data/StudyProgressSaveGame.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
+#include "Game/StudyProgressSubsystem.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "HttpModule.h"
 #include "ImageUtils.h"
@@ -53,6 +55,39 @@ bool UStudyPadSubsystem::ShouldCreateSubsystem(
 		return false;
 	}
 	return Super::ShouldCreateSubsystem(Outer);
+}
+
+void UStudyPadSubsystem::Initialize(
+	FSubsystemCollectionBase& Collection)
+{
+	Collection.InitializeDependency<UStudyProgressSubsystem>();
+	Super::Initialize(Collection);
+	CachedProgressSubsystem =
+		GetWorld()->GetSubsystem<UStudyProgressSubsystem>();
+	LoadSavedBoards();
+}
+
+void UStudyPadSubsystem::LoadSavedBoards()
+{
+	if (!CachedProgressSubsystem.IsValid())
+	{
+		return;
+	}
+	for (const TPair<FString, FStudySavedProblem>& Problem :
+		 CachedProgressSubsystem->GetProblems())
+	{
+		const TArray<uint8>& PngBytes{
+			Problem.Value.BoardImagePngBytes};
+		UTexture2D* SavedTexture{
+			FImageUtils::ImportBufferAsTexture2D(PngBytes)};
+		if (!SavedTexture)
+		{
+			continue;
+		}
+		ProblemTextures.Add(Problem.Key, SavedTexture);
+		LastImageChecksums.Add(Problem.Key, FCrc::MemCrc32(
+			PngBytes.GetData(), PngBytes.Num()));
+	}
 }
 
 void UStudyPadSubsystem::StartPolling()
@@ -142,6 +177,10 @@ void UStudyPadSubsystem::PublishImage(
 	}
 	LastImageChecksums.Add(ProblemId, Checksum);
 	ProblemTextures.Add(ProblemId, ImportedTexture);
+	if (CachedProgressSubsystem.IsValid())
+	{
+		CachedProgressSubsystem->SetBoardImage(ProblemId, ImageBytes);
+	}
 	const float AspectRatio{static_cast<float>(
 		ImportedTexture->GetSizeX()) / ImportedTexture->GetSizeY()};
 	OnWorkImageUpdated.Broadcast(

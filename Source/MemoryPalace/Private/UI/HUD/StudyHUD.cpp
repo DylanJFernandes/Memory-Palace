@@ -76,6 +76,7 @@ void AStudyHUD::BindToPlayerState()
 	CachedStudyPlayerState = StudyPlayerState;
 	StudyPlayerState->OnExperienceChanged.BindUObject(
 		this, &AStudyHUD::HandleExperienceChanged);
+	StudyPlayerState->AnnounceAllExperience();
 }
 
 void AStudyHUD::HandleReviewStarted()
