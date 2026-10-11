@@ -56,13 +56,20 @@ private:
 	/* Adds the default mapping contexts for this player */
 	void AddMappingContexts();
 
-	/* Binds the interact action to the interact handler */
-	void BindInteractAction();
+	/* Binds the interact and hint actions to their handlers */
+	void BindStudyActions();
 
 	/* Uses the first interactable actor the pawn is standing in */
 	void HandleInteractPressed();
 
+	/* Asks the game mode for a hint about the active problem */
+	void HandleHintPressed();
+
 	/* Action that uses the interactable actor the pawn is in */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> InteractAction;
+
+	/* Action that asks for a hint */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
+	TObjectPtr<UInputAction> HintAction;
 };

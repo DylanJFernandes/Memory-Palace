@@ -5,6 +5,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
+#include "Game/MemoryPalaceGameMode.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Interaction/StudyInteractable.h"
@@ -56,7 +58,7 @@ void AMemoryPalacePlayerController::SetupInputComponent()
 		return;
 	}
 	AddMappingContexts();
-	BindInteractAction();
+	BindStudyActions();
 }
 
 void AMemoryPalacePlayerController::AddMappingContexts()
@@ -85,17 +87,37 @@ void AMemoryPalacePlayerController::AddMappingContexts()
 	}
 }
 
-void AMemoryPalacePlayerController::BindInteractAction()
+void AMemoryPalacePlayerController::BindStudyActions()
 {
 	UEnhancedInputComponent* EnhancedInputComponent{
 		Cast<UEnhancedInputComponent>(InputComponent)};
-	if (!EnhancedInputComponent || !InteractAction)
+	if (!EnhancedInputComponent)
 	{
 		return;
 	}
-	EnhancedInputComponent->BindAction(
-		InteractAction, ETriggerEvent::Started, this,
-		&AMemoryPalacePlayerController::HandleInteractPressed);
+	if (InteractAction)
+	{
+		EnhancedInputComponent->BindAction(
+			InteractAction, ETriggerEvent::Started, this,
+			&AMemoryPalacePlayerController::HandleInteractPressed);
+	}
+	if (HintAction)
+	{
+		EnhancedInputComponent->BindAction(
+			HintAction, ETriggerEvent::Started, this,
+			&AMemoryPalacePlayerController::HandleHintPressed);
+	}
+}
+
+void AMemoryPalacePlayerController::HandleHintPressed()
+{
+	AMemoryPalaceGameMode* GameMode{
+		GetWorld()->GetAuthGameMode<AMemoryPalaceGameMode>()};
+	if (!GameMode)
+	{
+		return;
+	}
+	GameMode->RequestHint();
 }
 
 void AMemoryPalacePlayerController::HandleInteractPressed()
