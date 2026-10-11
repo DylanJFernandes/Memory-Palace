@@ -30,6 +30,7 @@ void AMemoryPalaceGameMode::StartProblem(const FString& ProblemId)
 	{
 		return;
 	}
+	RewardedPartKeysInAttempt.Empty();
 	CachedStudyPadSubsystem->StartProblem(ProblemId);
 	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
 	if (!StudyGameState)
@@ -37,6 +38,15 @@ void AMemoryPalaceGameMode::StartProblem(const FString& ProblemId)
 		return;
 	}
 	StudyGameState->SetActiveProblem(ProblemId);
+}
+
+void AMemoryPalaceGameMode::RequestHint()
+{
+	if (!CachedStudyPadSubsystem.IsValid())
+	{
+		return;
+	}
+	CachedStudyPadSubsystem->RequestHint();
 }
 
 void AMemoryPalaceGameMode::UnlockStartingSections()
@@ -87,7 +97,7 @@ void AMemoryPalaceGameMode::AwardExperience(
 	}
 	const double EarnedExperience{
 		ClaimCorrectPartsExperience(ReviewResult, *StudyPlayerState)};
-	const int32 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
+	const int64 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
 	if (ExperienceAmount <= 0)
 	{
 		return;
@@ -117,6 +127,11 @@ double AMemoryPalaceGameMode::ClaimCorrectPartsExperience(
 		}
 		const FString PartKey{
 			ReviewResult.ProblemId + TEXT(":") + Part.Id};
+		if (RewardedPartKeysInAttempt.Contains(PartKey))
+		{
+			continue;
+		}
+		RewardedPartKeysInAttempt.Add(PartKey);
 		const double Freshness{
 			ComputeFreshness(StudyPlayerState, PartKey)};
 		EarnedExperience += PartExperience * Freshness;

@@ -27,6 +27,9 @@ public:
 	   game state */
 	void StartProblem(const FString& ProblemId);
 
+	/* Asks the study pad for a hint about the active problem */
+	void RequestHint();
+
 protected:
 	/* Listens for reviews and starts the study pad polling */
 	virtual void BeginPlay() override;
@@ -88,6 +91,10 @@ private:
 	/* Sections of the course and their unlock thresholds */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Rules")
 	TObjectPtr<UStudyCurriculumDataAsset> Curriculum;
+
+	/* Parts that already earned experience since the problem was
+	   last started, so submitting again cannot earn it twice */
+	TSet<FString> RewardedPartKeysInAttempt;
 
 	// Cached Vars
 	/* Subsystem this game mode is listening to */
