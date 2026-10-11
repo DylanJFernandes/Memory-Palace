@@ -2,6 +2,7 @@
 
 #include "Game/StudyPadSubsystem.h"
 #include "Data/StudyProgressSaveGame.h"
+#include "Data/StudyServerAddress.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
@@ -17,8 +18,6 @@
 
 namespace
 {
-	constexpr const TCHAR* ServerBaseUrl{
-		TEXT("http://127.0.0.1:3000")};
 	constexpr const TCHAR* LatestImagePath{
 		TEXT("/latest.png")};
 	constexpr const TCHAR* LatestResultPath{
@@ -132,7 +131,7 @@ TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		FHttpModule::Get().CreateRequest()};
-	Request->SetURL(FString{ServerBaseUrl} + Path);
+	Request->SetURL(FString{StudyServerBaseUrl} + Path);
 	Request->SetVerb(Verb);
 	return Request;
 }
