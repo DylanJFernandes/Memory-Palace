@@ -55,6 +55,8 @@ void AStudyHUD::BindToStudyPadSubsystem()
 		this, &AStudyHUD::HandleReviewFinished);
 	StudyPadSubsystem->OnReviewFailed.AddUObject(
 		this, &AStudyHUD::HandleReviewFailed);
+	StudyPadSubsystem->OnHintUpdated.BindUObject(
+		this, &AStudyHUD::HandleHintUpdated);
 }
 
 void AStudyHUD::BindToPlayerState()
@@ -104,6 +106,15 @@ void AStudyHUD::HandleReviewFailed(const FString& ErrorMessage)
 	FeedbackWidget->ShowError(ErrorMessage);
 }
 
+void AStudyHUD::HandleHintUpdated(const FString& HintText)
+{
+	if (!FeedbackWidget)
+	{
+		return;
+	}
+	FeedbackWidget->ShowHint(HintText);
+}
+
 void AStudyHUD::HandleExperienceChanged(
 	EStudyTopicKind TopicKind, FName TopicName,
 	int32 TotalExperience)
@@ -123,6 +134,7 @@ void AStudyHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		CachedStudyPadSubsystem->OnReviewStarted.RemoveAll(this);
 		CachedStudyPadSubsystem->OnReviewFinished.RemoveAll(this);
 		CachedStudyPadSubsystem->OnReviewFailed.RemoveAll(this);
+		CachedStudyPadSubsystem->OnHintUpdated.Unbind();
 	}
 	if (CachedStudyPlayerState.IsValid())
 	{

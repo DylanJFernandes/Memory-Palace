@@ -49,6 +49,9 @@ private:
 	/* Shows why the review failed */
 	void HandleReviewFailed(const FString& ErrorMessage);
 
+	/* Shows a hint, or a message while one is written */
+	void HandleHintUpdated(const FString& HintText);
+
 	/* Shows a topic's new experience total */
 	void HandleExperienceChanged(EStudyTopicKind TopicKind,
 								 FName TopicName,

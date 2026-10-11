@@ -25,6 +25,9 @@ public:
 	/* Shows why the review could not be completed */
 	void ShowError(const FString& ErrorMessage);
 
+	/* Shows a hint, or a short message while one is written */
+	void ShowHint(const FString& HintText);
+
 private:
 	/* Replaces the three texts and makes the widget visible */
 	void ShowTexts(const FString& Status, const FString& Feedback,

@@ -28,6 +28,11 @@ void UStudyFeedbackWidget::ShowError(const FString& ErrorMessage)
 	ShowTexts(TEXT("Review failed"), ErrorMessage, FString{});
 }
 
+void UStudyFeedbackWidget::ShowHint(const FString& HintText)
+{
+	ShowTexts(TEXT("Hint"), HintText, FString{});
+}
+
 void UStudyFeedbackWidget::ShowTexts(
 	const FString& Status, const FString& Feedback,
 	const FString& Details)
@@ -76,9 +81,12 @@ FString UStudyFeedbackWidget::BuildPartLine(
 	{
 		return FString::Printf(TEXT("%s: correct"), *Part.Label);
 	}
-	const FString Written{Part.StudentAnswer.IsEmpty()
-		? FString{TEXT("nothing")} : Part.StudentAnswer};
+	if (Part.StudentAnswer.IsEmpty())
+	{
+		return FString::Printf(
+			TEXT("%s: nothing written yet"), *Part.Label);
+	}
 	return FString::Printf(
-		TEXT("%s: wrong (you wrote %s, answer is %s)"),
-		*Part.Label, *Written, *Part.CorrectAnswer);
+		TEXT("%s: not right yet (you wrote %s)"),
+		*Part.Label, *Part.StudentAnswer);
 }
