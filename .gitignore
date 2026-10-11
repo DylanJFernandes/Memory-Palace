@@ -75,3 +75,8 @@ DerivedDataCache/*
 .vsconfig
 Automation_MemoryPalace.slnx
 MemoryPalace.slnx
+
+# Local tooling
+.idea/
+.claude/settings.local.json
+*.blend1
