@@ -24,6 +24,9 @@ public:
 	/* Sets default values for this subsystem */
 	UStudyPadImageSubsystem();
 
+	/* Returns the newest image, or null if none arrived yet */
+	UTexture2D* GetLatestTexture() const;
+
 	/* Fires whenever a new image has been downloaded */
 	FStudyPadImageReceived OnImageReceived;
 

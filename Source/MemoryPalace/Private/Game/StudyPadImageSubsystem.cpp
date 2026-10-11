@@ -94,6 +94,11 @@ void UStudyPadImageSubsystem::PublishImage(
 	OnImageReceived.ExecuteIfBound(LatestTexture);
 }
 
+UTexture2D* UStudyPadImageSubsystem::GetLatestTexture() const
+{
+	return LatestTexture;
+}
+
 void UStudyPadImageSubsystem::Deinitialize()
 {
 	if (UWorld* World{GetWorld()})
