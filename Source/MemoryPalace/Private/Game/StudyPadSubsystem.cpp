@@ -20,16 +20,19 @@ namespace
 	constexpr const TCHAR* LatestImagePath{
 		TEXT("/latest.png")};
 	constexpr const TCHAR* LatestResultPath{
-		TEXT("/result.json")};
+		TEXT("/result.json?source=game")};
 	constexpr const TCHAR* StartProblemPath{
 		TEXT("/start?problem=")};
+	constexpr const TCHAR* EndProblemPath{
+		TEXT("/end")};
 	constexpr float ImagePollIntervalSeconds{1.0f};
 	constexpr float ResultPollIntervalSeconds{0.7f};
 	constexpr int32 HttpStatusOk{200};
 }
 
 UStudyPadSubsystem::UStudyPadSubsystem()
-	: bIsImageRequestInFlight{false}
+	: bIsPolling{false}
+	, bIsImageRequestInFlight{false}
 	, bIsResultRequestInFlight{false}
 	, bHasPolledResult{false}
 	, CurrentReviewStatus{EStudyReviewStatus::Idle}
@@ -51,6 +54,7 @@ bool UStudyPadSubsystem::ShouldCreateSubsystem(
 
 void UStudyPadSubsystem::StartPolling()
 {
+	bIsPolling = true;
 	FTimerManager& TimerManager{GetWorld()->GetTimerManager()};
 	TimerManager.SetTimer(
 		ImagePollTimerHandle, this,
@@ -283,6 +287,12 @@ float UStudyPadSubsystem::GetLatestAspectRatio() const
 	return LatestAspectRatio;
 }
 
+void UStudyPadSubsystem::EndProblem()
+{
+	CreateServerRequest(TEXT("POST"), EndProblemPath)
+		->ProcessRequest();
+}
+
 void UStudyPadSubsystem::Deinitialize()
 {
 	if (UWorld* World{GetWorld()})
@@ -290,6 +300,10 @@ void UStudyPadSubsystem::Deinitialize()
 		FTimerManager& TimerManager{World->GetTimerManager()};
 		TimerManager.ClearTimer(ImagePollTimerHandle);
 		TimerManager.ClearTimer(ResultPollTimerHandle);
+	}
+	if (bIsPolling)
+	{
+		EndProblem();
 	}
 	Super::Deinitialize();
 }

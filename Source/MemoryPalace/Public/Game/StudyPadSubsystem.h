@@ -84,6 +84,10 @@ protected:
 	virtual void Deinitialize() override;
 
 private:
+	/* Tells the server the game is closing, which ends the
+	   active problem */
+	void EndProblem();
+
 	/* Sends a request for the latest image unless one is
 	   already waiting for a response */
 	void RequestLatestImage();
@@ -134,6 +138,9 @@ private:
 	/* Converts the server's status text to a review status */
 	static EStudyReviewStatus ParseStatus(
 		const FString& StatusText);
+
+	/* Whether polling has been started for this world */
+	bool bIsPolling;
 
 	/* Whether an image request is still waiting */
 	bool bIsImageRequestInFlight;
