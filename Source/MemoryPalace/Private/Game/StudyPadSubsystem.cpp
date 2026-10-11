@@ -25,6 +25,10 @@ namespace
 		TEXT("/start?problem=")};
 	constexpr const TCHAR* EndProblemPath{
 		TEXT("/end")};
+	constexpr const TCHAR* HintPath{
+		TEXT("/hint")};
+	constexpr float HintTimeoutSeconds{60.0f};
+	constexpr int32 HttpStatusConflict{409};
 	constexpr float ImagePollIntervalSeconds{1.0f};
 	constexpr float ResultPollIntervalSeconds{0.7f};
 	constexpr int32 HttpStatusOk{200};
@@ -164,15 +168,73 @@ void UStudyPadSubsystem::HandleResultResponse(
 		HandleResultUnavailable();
 		return;
 	}
-	TSharedPtr<FJsonObject> ResultObject;
-	TSharedRef<TJsonReader<>> Reader{
-		TJsonReaderFactory<>::Create(Response->GetContentAsString())};
-	if (!FJsonSerializer::Deserialize(Reader, ResultObject))
+	const TSharedPtr<FJsonObject> ResultObject{
+		ParseJsonObject(Response->GetContentAsString())};
+	if (!ResultObject.IsValid())
 	{
 		HandleResultUnavailable();
 		return;
 	}
 	ApplyServerStatus(*ResultObject);
+}
+
+TSharedPtr<FJsonObject> UStudyPadSubsystem::ParseJsonObject(
+	const FString& JsonText)
+{
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader{
+		TJsonReaderFactory<>::Create(JsonText)};
+	FJsonSerializer::Deserialize(Reader, JsonObject);
+	return JsonObject;
+}
+
+void UStudyPadSubsystem::RequestHint()
+{
+	OnHintUpdated.ExecuteIfBound(TEXT("Thinking of a hint..."));
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
+		CreateServerRequest(TEXT("POST"), HintPath)};
+	Request->SetTimeout(HintTimeoutSeconds);
+	Request->OnProcessRequestComplete().BindUObject(
+		this, &UStudyPadSubsystem::HandleHintResponse);
+	Request->ProcessRequest();
+}
+
+void UStudyPadSubsystem::HandleHintResponse(
+	FHttpRequestPtr Request, FHttpResponsePtr Response,
+	bool bConnectedSuccessfully)
+{
+	const bool bHasHint{
+		bConnectedSuccessfully && Response.IsValid()
+		&& Response->GetResponseCode() == HttpStatusOk};
+	if (!bHasHint)
+	{
+		const FString FailureMessage{
+			BuildHintFailureMessage(Response, bConnectedSuccessfully)};
+		OnHintUpdated.ExecuteIfBound(FailureMessage);
+		return;
+	}
+	FString HintText;
+	const TSharedPtr<FJsonObject> HintObject{
+		ParseJsonObject(Response->GetContentAsString())};
+	if (HintObject.IsValid())
+	{
+		HintObject->TryGetStringField(TEXT("hint"), HintText);
+	}
+	OnHintUpdated.ExecuteIfBound(HintText);
+}
+
+FString UStudyPadSubsystem::BuildHintFailureMessage(
+	FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!bConnectedSuccessfully || !Response.IsValid())
+	{
+		return TEXT("Couldn't reach the study pad server.");
+	}
+	if (Response->GetResponseCode() == HttpStatusConflict)
+	{
+		return TEXT("Start a problem at a station first.");
+	}
+	return TEXT("Couldn't get a hint right now.");
 }
 
 void UStudyPadSubsystem::HandleResultUnavailable()

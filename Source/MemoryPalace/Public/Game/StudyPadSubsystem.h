@@ -30,6 +30,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FStudyReviewFinished,
 DECLARE_MULTICAST_DELEGATE_OneParam(FStudyReviewFailed,
 									const FString&);
 
+/* Fires with the hint text, or a short status message while it
+   is being written; only the HUD listens, so it is not multicast */
+DECLARE_DELEGATE_OneParam(FStudyHintUpdated, const FString&);
+
 /* Stage of the review as last reported by the server */
 enum class EStudyReviewStatus : uint8
 {
@@ -57,6 +61,9 @@ public:
 	/* Tells the server which problem is now active */
 	void StartProblem(const FString& ProblemId);
 
+	/* Asks the server for a hint about the active problem */
+	void RequestHint();
+
 	/* Returns the newest image, or null if none arrived yet */
 	UTexture2D* GetLatestTexture() const;
 
@@ -74,6 +81,9 @@ public:
 
 	/* Fires when the review failed or the server went away */
 	FStudyReviewFailed OnReviewFailed;
+
+	/* Fires while a hint is requested and when it arrives */
+	FStudyHintUpdated OnHintUpdated;
 
 protected:
 	/* Creates the subsystem only for game worlds */
@@ -112,6 +122,20 @@ private:
 
 	/* Reports a failure if a review was waiting on the server */
 	void HandleResultUnavailable();
+
+	/* Shows the hint from the server's response, or why there
+	   is none */
+	void HandleHintResponse(FHttpRequestPtr Request,
+							FHttpResponsePtr Response,
+							bool bConnectedSuccessfully);
+
+	/* Returns the message to show when no hint could be given */
+	static FString BuildHintFailureMessage(
+		FHttpResponsePtr Response, bool bConnectedSuccessfully);
+
+	/* Reads text as a JSON object, or null if it is not one */
+	static TSharedPtr<FJsonObject> ParseJsonObject(
+		const FString& JsonText);
 
 	/* Announces what the server reported, then marks the first
 	   poll as done */
