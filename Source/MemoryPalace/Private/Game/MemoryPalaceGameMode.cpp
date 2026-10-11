@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "MemoryPalaceGameMode.h"
+#include "Game/MemoryPalaceGameMode.h"
 
 AMemoryPalaceGameMode::AMemoryPalaceGameMode()
 {

@@ -1,11 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 
-#include "MemoryPalacePlayerController.h"
+#include "Player/MemoryPalacePlayerController.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
-#include "MemoryPalaceCameraManager.h"
+#include "Player/MemoryPalaceCameraManager.h"
 #include "Blueprint/UserWidget.h"
 #include "MemoryPalace.h"
 #include "Widgets/Input/SVirtualJoystick.h"

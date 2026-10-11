@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 
-#include "MemoryPalaceCameraManager.h"
+#include "Player/MemoryPalaceCameraManager.h"
 
 AMemoryPalaceCameraManager::AMemoryPalaceCameraManager()
 {
