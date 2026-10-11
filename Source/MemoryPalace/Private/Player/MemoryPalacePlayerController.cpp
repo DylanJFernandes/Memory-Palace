@@ -2,17 +2,24 @@
 
 
 #include "Player/MemoryPalacePlayerController.h"
+#include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Interaction/StudyInteractable.h"
 #include "Player/MemoryPalaceCameraManager.h"
 #include "Blueprint/UserWidget.h"
 #include "MemoryPalace.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
+namespace
+{
+	constexpr int32 MappingContextPriority{0};
+}
+
 AMemoryPalacePlayerController::AMemoryPalacePlayerController()
 {
-	// set the player camera manager class
 	PlayerCameraManagerClass = AMemoryPalaceCameraManager::StaticClass();
 }
 
@@ -20,7 +27,7 @@ void AMemoryPalacePlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	
+
 	// only spawn touch controls on local player controllers
 	if (IsLocalPlayerController() && ShouldUseTouchControls())
 	{
@@ -44,29 +51,72 @@ void AMemoryPalacePlayerController::BeginPlay()
 void AMemoryPalacePlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-
-	// only add IMCs for local player controllers
-	if (IsLocalPlayerController())
+	if (!IsLocalPlayerController())
 	{
-		// Add Input Mapping Context
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-		{
-			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
-			{
-				Subsystem->AddMappingContext(CurrentContext, 0);
-			}
+		return;
+	}
+	AddMappingContexts();
+	BindInteractAction();
+}
 
-			// only add these IMCs if we're not using mobile touch input
-			if (!ShouldUseTouchControls())
-			{
-				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
-				{
-					Subsystem->AddMappingContext(CurrentContext, 0);
-				}
-			}
+void AMemoryPalacePlayerController::AddMappingContexts()
+{
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem{
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+			GetLocalPlayer())};
+	if (!InputSubsystem)
+	{
+		return;
+	}
+	for (UInputMappingContext* MappingContext : DefaultMappingContexts)
+	{
+		InputSubsystem->AddMappingContext(
+			MappingContext, MappingContextPriority);
+	}
+	if (ShouldUseTouchControls())
+	{
+		return;
+	}
+	for (UInputMappingContext* MappingContext :
+		 MobileExcludedMappingContexts)
+	{
+		InputSubsystem->AddMappingContext(
+			MappingContext, MappingContextPriority);
+	}
+}
+
+void AMemoryPalacePlayerController::BindInteractAction()
+{
+	UEnhancedInputComponent* EnhancedInputComponent{
+		Cast<UEnhancedInputComponent>(InputComponent)};
+	if (!EnhancedInputComponent || !InteractAction)
+	{
+		return;
+	}
+	EnhancedInputComponent->BindAction(
+		InteractAction, ETriggerEvent::Started, this,
+		&AMemoryPalacePlayerController::HandleInteractPressed);
+}
+
+void AMemoryPalacePlayerController::HandleInteractPressed()
+{
+	const APawn* ControlledPawn{GetPawn()};
+	if (!ControlledPawn)
+	{
+		return;
+	}
+	TArray<AActor*> OverlappingActors;
+	ControlledPawn->GetOverlappingActors(OverlappingActors);
+	for (AActor* OverlappingActor : OverlappingActors)
+	{
+		IStudyInteractable* Interactable{
+			Cast<IStudyInteractable>(OverlappingActor)};
+		if (Interactable)
+		{
+			Interactable->Interact();
+			return;
 		}
 	}
-	
 }
 
 bool AMemoryPalacePlayerController::ShouldUseTouchControls() const

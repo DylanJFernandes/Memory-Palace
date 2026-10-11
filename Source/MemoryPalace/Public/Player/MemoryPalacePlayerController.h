@@ -6,52 +6,63 @@
 #include "GameFramework/PlayerController.h"
 #include "MemoryPalacePlayerController.generated.h"
 
+class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
 
-/**
- *  Simple first person Player Controller
- *  Manages the input mapping context.
- *  Overrides the Player Camera Manager class.
- */
+/* First person player controller that sets up input and lets the
+   player use interactable actors they stand in */
 UCLASS(abstract, config="Game")
-class MEMORYPALACE_API AMemoryPalacePlayerController : public APlayerController
+class MEMORYPALACE_API AMemoryPalacePlayerController
+	: public APlayerController
 {
 	GENERATED_BODY()
-	
-public:
 
-	/** Constructor */
+public:
+	/* Sets the camera manager class */
 	AMemoryPalacePlayerController();
 
 protected:
-
-	/** Input Mapping Contexts */
+	/* Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> DefaultMappingContexts;
 
-	/** Input Mapping Contexts */
+	/* Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> MobileExcludedMappingContexts;
 
-	/** Mobile controls widget to spawn */
+	/* Mobile controls widget to spawn */
 	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")
 	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
 
-	/** Pointer to the mobile controls widget */
+	/* Pointer to the mobile controls widget */
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MobileControlsWidget;
 
-	/** If true, the player will use UMG touch controls even if not playing on mobile platforms */
+	/* If true, the player will use UMG touch controls even if not playing on mobile platforms */
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
 	bool bForceTouchControls = false;
 
-	/** Gameplay initialization */
+	/* Gameplay initialization */
 	virtual void BeginPlay() override;
 
-	/** Input mapping context setup */
+	/* Adds the mapping contexts and binds the interact action */
 	virtual void SetupInputComponent() override;
 
-	/** Returns true if the player should use UMG touch controls */
+	/* Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+
+private:
+	/* Adds the default mapping contexts for this player */
+	void AddMappingContexts();
+
+	/* Binds the interact action to the interact handler */
+	void BindInteractAction();
+
+	/* Uses the first interactable actor the pawn is standing in */
+	void HandleInteractPressed();
+
+	/* Action that uses the interactable actor the pawn is in */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
+	TObjectPtr<UInputAction> InteractAction;
 };
