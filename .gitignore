@@ -73,3 +73,13 @@ Plugins/**/Intermediate/*
 # Cache files for the editor to use
 DerivedDataCache/*
 MemoryPalace.uproject
+.vsconfig
+Automation_MemoryPalace.slnx
+MemoryPalace.slnx
+
+# Local tooling
+.idea/
+.claude/settings.local.json
+*.blend1
+__pycache__/
+*.pyc
