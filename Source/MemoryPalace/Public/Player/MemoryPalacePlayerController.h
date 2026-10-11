@@ -6,10 +6,14 @@
 #include "GameFramework/PlayerController.h"
 #include "MemoryPalacePlayerController.generated.h"
 
-class AStudyHUD;
+class IStudyPageable;
 class UInputAction;
 class UInputMappingContext;
+class UStudyCursorInteractionComponent;
 class UUserWidget;
+
+/* Broadcast when the cursor becomes active or inactive */
+DECLARE_MULTICAST_DELEGATE(FStudyCursorEvent);
 
 /* First person player controller that sets up input and lets the
    player use interactable actors they stand in */
@@ -22,6 +26,17 @@ class MEMORYPALACE_API AMemoryPalacePlayerController
 public:
 	/* Sets the camera manager class */
 	AMemoryPalacePlayerController();
+
+	/* Types the key into the world widget under the cursor while
+	   the cursor is active, otherwise handles it as usual */
+	virtual bool InputKey(
+		const FInputKeyEventArgs& Params) override;
+
+	/* Fires when the cursor becomes active */
+	FStudyCursorEvent OnCursorShown;
+
+	/* Fires when the cursor stops being active */
+	FStudyCursorEvent OnCursorHidden;
 
 protected:
 	/* Input Mapping Contexts */
@@ -63,11 +78,20 @@ private:
 	/* Uses the first interactable actor the pawn is standing in */
 	void HandleInteractPressed();
 
+	/* Binds the left and right arrow keys to paging */
+	void BindPageKeys();
+
+	/* Flips the pageable actor the pawn is standing in back */
+	void HandlePreviousPagePressed();
+
+	/* Flips the pageable actor the pawn is standing in forward */
+	void HandleNextPagePressed();
+
+	/* Returns the first pageable actor the pawn is standing in */
+	IStudyPageable* FindOverlappingPageable() const;
+
 	/* Asks the game mode for a hint about the active problem */
 	void HandleHintPressed();
-
-	/* Opens or closes the grade history */
-	void HandleHistoryPressed();
 
 	/* Shows the mouse cursor and stops the camera from turning */
 	void HandleCursorPressed();
@@ -75,9 +99,18 @@ private:
 	/* Hides the mouse cursor and lets the camera turn again */
 	void HandleCursorReleased();
 
-	/* Returns this controller's study HUD, caching it on first
-	   use */
-	AStudyHUD* GetStudyHUD();
+	/* Binds the mouse button and wheel to the cursor widget
+	   interaction */
+	void BindCursorForwarding();
+
+	/* Clicks the world widget under the cursor */
+	void HandleCursorButtonPressed();
+
+	/* Lets go of the click on the world widget */
+	void HandleCursorButtonReleased();
+
+	/* Scrolls the world widget under the cursor */
+	void HandleCursorWheel(float WheelDelta);
 
 	/* Action that uses the interactable actor the pawn is in */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
@@ -87,15 +120,15 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> HintAction;
 
-	/* Action that opens and closes the grade history */
-	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
-	TObjectPtr<UInputAction> HistoryAction;
-
 	/* Action held to use the mouse cursor on the screen */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> CursorAction;
 
-	// Cached Vars
-	/* HUD spawned for this controller */
-	TWeakObjectPtr<AStudyHUD> CachedStudyHUD;
+	/* Component that clicks and types into world widgets */
+	UPROPERTY(VisibleAnywhere, Category = "Custom|Components")
+	TObjectPtr<UStudyCursorInteractionComponent>
+		CursorInteractionComponent;
+
+	/* Whether the cursor is currently active */
+	bool bIsCursorActive;
 };
