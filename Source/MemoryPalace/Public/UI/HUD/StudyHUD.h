@@ -11,6 +11,7 @@
 class AStudyPlayerState;
 class UStudyExperienceWidget;
 class UStudyFeedbackWidget;
+class UStudyGradeHistoryWidget;
 class UStudyPadSubsystem;
 
 /* Creates and owns the study widgets and feeds them live data */
@@ -18,6 +19,11 @@ UCLASS()
 class MEMORYPALACE_API AStudyHUD : public AHUD
 {
 	GENERATED_BODY()
+
+public:
+	/* Opens the grade history of the active problem, or closes
+	   it if it is open */
+	void ToggleGradeHistory();
 
 protected:
 	/* Creates the widgets and starts listening for updates */
@@ -33,6 +39,13 @@ private:
 
 	/* Creates the experience widget and adds it to the screen */
 	void CreateExperienceWidget();
+
+	/* Creates the grade history widget, hidden until opened */
+	void CreateGradeHistoryWidget();
+
+	/* Fills the grade history with the active problem's saved
+	   submissions */
+	void RefreshGradeHistory();
 
 	/* Listens for review events from the study pad */
 	void BindToStudyPadSubsystem();
@@ -64,6 +77,14 @@ private:
 	/* Widget class used for the experience bars */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|UI")
 	TSubclassOf<UStudyExperienceWidget> ExperienceWidgetClass;
+
+	/* Widget class used for the grade history */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|UI")
+	TSubclassOf<UStudyGradeHistoryWidget> GradeHistoryWidgetClass;
+
+	/* Grade history widget created and owned by this HUD */
+	UPROPERTY()
+	TObjectPtr<UStudyGradeHistoryWidget> GradeHistoryWidget;
 
 	/* Feedback widget created and owned by this HUD */
 	UPROPERTY()

@@ -11,6 +11,7 @@
 #include "InputMappingContext.h"
 #include "Interaction/StudyInteractable.h"
 #include "Player/MemoryPalaceCameraManager.h"
+#include "UI/HUD/StudyHUD.h"
 #include "Blueprint/UserWidget.h"
 #include "MemoryPalace.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -107,6 +108,54 @@ void AMemoryPalacePlayerController::BindStudyActions()
 			HintAction, ETriggerEvent::Started, this,
 			&AMemoryPalacePlayerController::HandleHintPressed);
 	}
+	if (HistoryAction)
+	{
+		EnhancedInputComponent->BindAction(
+			HistoryAction, ETriggerEvent::Started, this,
+			&AMemoryPalacePlayerController::HandleHistoryPressed);
+	}
+	if (CursorAction)
+	{
+		EnhancedInputComponent->BindAction(
+			CursorAction, ETriggerEvent::Started, this,
+			&AMemoryPalacePlayerController::HandleCursorPressed);
+		EnhancedInputComponent->BindAction(
+			CursorAction, ETriggerEvent::Completed, this,
+			&AMemoryPalacePlayerController::HandleCursorReleased);
+	}
+}
+
+void AMemoryPalacePlayerController::HandleHistoryPressed()
+{
+	AStudyHUD* StudyHUD{GetStudyHUD()};
+	if (!StudyHUD)
+	{
+		return;
+	}
+	StudyHUD->ToggleGradeHistory();
+}
+
+void AMemoryPalacePlayerController::HandleCursorPressed()
+{
+	SetShowMouseCursor(true);
+	SetIgnoreLookInput(true);
+	SetInputMode(FInputModeGameAndUI{});
+}
+
+void AMemoryPalacePlayerController::HandleCursorReleased()
+{
+	SetShowMouseCursor(false);
+	SetIgnoreLookInput(false);
+	SetInputMode(FInputModeGameOnly{});
+}
+
+AStudyHUD* AMemoryPalacePlayerController::GetStudyHUD()
+{
+	if (!CachedStudyHUD.IsValid())
+	{
+		CachedStudyHUD = GetHUD<AStudyHUD>();
+	}
+	return CachedStudyHUD.Get();
 }
 
 void AMemoryPalacePlayerController::HandleHintPressed()

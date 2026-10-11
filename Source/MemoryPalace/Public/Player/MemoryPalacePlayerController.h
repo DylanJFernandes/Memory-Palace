@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "MemoryPalacePlayerController.generated.h"
 
+class AStudyHUD;
 class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
@@ -65,6 +66,19 @@ private:
 	/* Asks the game mode for a hint about the active problem */
 	void HandleHintPressed();
 
+	/* Opens or closes the grade history */
+	void HandleHistoryPressed();
+
+	/* Shows the mouse cursor and stops the camera from turning */
+	void HandleCursorPressed();
+
+	/* Hides the mouse cursor and lets the camera turn again */
+	void HandleCursorReleased();
+
+	/* Returns this controller's study HUD, caching it on first
+	   use */
+	AStudyHUD* GetStudyHUD();
+
 	/* Action that uses the interactable actor the pawn is in */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> InteractAction;
@@ -72,4 +86,16 @@ private:
 	/* Action that asks for a hint */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> HintAction;
+
+	/* Action that opens and closes the grade history */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
+	TObjectPtr<UInputAction> HistoryAction;
+
+	/* Action held to use the mouse cursor on the screen */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
+	TObjectPtr<UInputAction> CursorAction;
+
+	// Cached Vars
+	/* HUD spawned for this controller */
+	TWeakObjectPtr<AStudyHUD> CachedStudyHUD;
 };
