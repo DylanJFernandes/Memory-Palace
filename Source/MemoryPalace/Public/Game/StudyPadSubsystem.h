@@ -11,17 +11,22 @@
 class FJsonObject;
 class UTexture2D;
 
-/* Fires with the newest whiteboard image once it is decoded */
-DECLARE_DELEGATE_OneParam(FStudyPadImageReceived, UTexture2D*);
+/* Fires with the newest whiteboard image and its width over
+   height; multicast because every whiteboard listens */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FStudyWorkImageUpdated,
+									 UTexture2D*, float);
 
-/* Fires when the student submitted and the AI began reviewing */
+/* Fires when the student submitted and the AI began reviewing;
+   multicast because the HUD and the game mode both listen */
 DECLARE_MULTICAST_DELEGATE(FStudyReviewStarted);
 
-/* Fires when the AI's verdict arrives */
+/* Fires when the AI's verdict arrives; multicast because the
+   HUD and the game mode both listen */
 DECLARE_MULTICAST_DELEGATE_OneParam(FStudyReviewFinished,
 									const FStudyReviewResult&);
 
-/* Fires with a message when the review could not be completed */
+/* Fires with a message when the review could not be completed;
+   multicast because the HUD and the game mode both listen */
 DECLARE_MULTICAST_DELEGATE_OneParam(FStudyReviewFailed,
 									const FString&);
 
@@ -35,7 +40,7 @@ enum class EStudyReviewStatus : uint8
 };
 
 /* Polls the study pad server for the live whiteboard image and
-   the AI's review while a game world is running */
+   the AI's review once polling has been started */
 UCLASS()
 class MEMORYPALACE_API UStudyPadSubsystem
 	: public UWorldSubsystem
@@ -46,11 +51,20 @@ public:
 	/* Sets default values for this subsystem */
 	UStudyPadSubsystem();
 
+	/* Starts asking the server for images and reviews */
+	void StartPolling();
+
+	/* Tells the server which problem is now active */
+	void StartProblem(const FString& ProblemId);
+
 	/* Returns the newest image, or null if none arrived yet */
 	UTexture2D* GetLatestTexture() const;
 
+	/* Returns the newest image's width over height */
+	float GetLatestAspectRatio() const;
+
 	/* Fires whenever a new image has been downloaded */
-	FStudyPadImageReceived OnImageReceived;
+	FStudyWorkImageUpdated OnWorkImageUpdated;
 
 	/* Fires when the AI starts reviewing a submission */
 	FStudyReviewStarted OnReviewStarted;
@@ -66,9 +80,6 @@ protected:
 	virtual bool ShouldCreateSubsystem(
 		UObject* Outer) const override;
 
-	/* Starts polling once the world begins play */
-	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
-
 	/* Stops polling when the world is torn down */
 	virtual void Deinitialize() override;
 
@@ -82,7 +93,8 @@ private:
 							 FHttpResponsePtr Response,
 							 bool bConnectedSuccessfully);
 
-	/* Decodes the PNG bytes and notifies listeners */
+	/* Decodes the PNG bytes and notifies listeners unless the
+	   image is the same as the last one */
 	void PublishImage(const TArray<uint8>& ImageBytes);
 
 	/* Sends a request for the latest review unless one is
@@ -97,15 +109,27 @@ private:
 	/* Reports a failure if a review was waiting on the server */
 	void HandleResultUnavailable();
 
-	/* Announces the status when it differs from the last one */
+	/* Announces what the server reported, then marks the first
+	   poll as done */
 	void ApplyServerStatus(const FJsonObject& ResultObject);
 
-	/* Fires the event that matches the current status */
-	void BroadcastStatusChange(const FJsonObject& ResultObject);
+	/* Announces the start of a review once per review */
+	void HandleReviewing();
 
-	/* Builds a GET request to the study pad server */
+	/* Announces a finished or failed review once per review,
+	   and stays silent for a leftover one on the first poll */
+	void HandleOutcome(const FJsonObject& ResultObject);
+
+	/* Fires the finished or failed event for the current status */
+	void BroadcastOutcome(const FJsonObject& ResultObject);
+
+	/* Builds a request to the study pad server */
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
-		CreateGetRequest(const TCHAR* Path);
+		CreateServerRequest(const TCHAR* Verb,
+							const FString& Path);
+
+	/* Builds a key that is unique to each submitted review */
+	static FString BuildResultKey(const FJsonObject& ResultObject);
 
 	/* Converts the server's status text to a review status */
 	static EStudyReviewStatus ParseStatus(
@@ -117,8 +141,20 @@ private:
 	/* Whether a result request is still waiting */
 	bool bIsResultRequestInFlight;
 
+	/* Whether the first result poll has already come back */
+	bool bHasPolledResult;
+
 	/* Review status the server reported last */
 	EStudyReviewStatus CurrentReviewStatus;
+
+	/* Key of the last finished or failed review announced */
+	FString LastHandledResultKey;
+
+	/* Checksum of the last image that was decoded */
+	uint32 LastImageChecksum;
+
+	/* Width over height of the newest image */
+	float LatestAspectRatio;
 
 	/* Timer that triggers each image poll */
 	FTimerHandle ImagePollTimerHandle;

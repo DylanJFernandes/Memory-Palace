@@ -4,9 +4,11 @@
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
 #include "HttpModule.h"
 #include "ImageUtils.h"
 #include "Interfaces/IHttpResponse.h"
+#include "Misc/Crc.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "TimerManager.h"
@@ -19,7 +21,9 @@ namespace
 		TEXT("/latest.png")};
 	constexpr const TCHAR* LatestResultPath{
 		TEXT("/result.json")};
-	constexpr float ImagePollIntervalSeconds{0.5f};
+	constexpr const TCHAR* StartProblemPath{
+		TEXT("/start?problem=")};
+	constexpr float ImagePollIntervalSeconds{1.0f};
 	constexpr float ResultPollIntervalSeconds{0.7f};
 	constexpr int32 HttpStatusOk{200};
 }
@@ -27,7 +31,10 @@ namespace
 UStudyPadSubsystem::UStudyPadSubsystem()
 	: bIsImageRequestInFlight{false}
 	, bIsResultRequestInFlight{false}
+	, bHasPolledResult{false}
 	, CurrentReviewStatus{EStudyReviewStatus::Idle}
+	, LastImageChecksum{0}
+	, LatestAspectRatio{1.0f}
 {
 }
 
@@ -42,10 +49,9 @@ bool UStudyPadSubsystem::ShouldCreateSubsystem(
 	return Super::ShouldCreateSubsystem(Outer);
 }
 
-void UStudyPadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+void UStudyPadSubsystem::StartPolling()
 {
-	Super::OnWorldBeginPlay(InWorld);
-	FTimerManager& TimerManager{InWorld.GetTimerManager()};
+	FTimerManager& TimerManager{GetWorld()->GetTimerManager()};
 	TimerManager.SetTimer(
 		ImagePollTimerHandle, this,
 		&UStudyPadSubsystem::RequestLatestImage,
@@ -56,6 +62,14 @@ void UStudyPadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		ResultPollIntervalSeconds, true);
 }
 
+void UStudyPadSubsystem::StartProblem(const FString& ProblemId)
+{
+	const FString EncodedProblemId{
+		FGenericPlatformHttp::UrlEncode(ProblemId)};
+	const FString Path{StartProblemPath + EncodedProblemId};
+	CreateServerRequest(TEXT("POST"), Path)->ProcessRequest();
+}
+
 void UStudyPadSubsystem::RequestLatestImage()
 {
 	if (bIsImageRequestInFlight)
@@ -64,19 +78,20 @@ void UStudyPadSubsystem::RequestLatestImage()
 	}
 	bIsImageRequestInFlight = true;
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
-		CreateGetRequest(LatestImagePath)};
+		CreateServerRequest(TEXT("GET"), LatestImagePath)};
 	Request->OnProcessRequestComplete().BindUObject(
 		this, &UStudyPadSubsystem::HandleImageResponse);
 	Request->ProcessRequest();
 }
 
 TSharedRef<IHttpRequest, ESPMode::ThreadSafe>
-	UStudyPadSubsystem::CreateGetRequest(const TCHAR* Path)
+	UStudyPadSubsystem::CreateServerRequest(
+		const TCHAR* Verb, const FString& Path)
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
 		FHttpModule::Get().CreateRequest()};
 	Request->SetURL(FString{ServerBaseUrl} + Path);
-	Request->SetVerb(TEXT("GET"));
+	Request->SetVerb(Verb);
 	return Request;
 }
 
@@ -99,14 +114,23 @@ void UStudyPadSubsystem::HandleImageResponse(
 void UStudyPadSubsystem::PublishImage(
 	const TArray<uint8>& ImageBytes)
 {
+	const uint32 Checksum{
+		FCrc::MemCrc32(ImageBytes.GetData(), ImageBytes.Num())};
+	if (LatestTexture && Checksum == LastImageChecksum)
+	{
+		return;
+	}
 	UTexture2D* ImportedTexture{
 		FImageUtils::ImportBufferAsTexture2D(ImageBytes)};
 	if (!ImportedTexture)
 	{
 		return;
 	}
+	LastImageChecksum = Checksum;
 	LatestTexture = ImportedTexture;
-	OnImageReceived.ExecuteIfBound(LatestTexture);
+	LatestAspectRatio = static_cast<float>(
+		ImportedTexture->GetSizeX()) / ImportedTexture->GetSizeY();
+	OnWorkImageUpdated.Broadcast(LatestTexture, LatestAspectRatio);
 }
 
 void UStudyPadSubsystem::RequestLatestResult()
@@ -117,7 +141,7 @@ void UStudyPadSubsystem::RequestLatestResult()
 	}
 	bIsResultRequestInFlight = true;
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
-		CreateGetRequest(LatestResultPath)};
+		CreateServerRequest(TEXT("GET"), LatestResultPath)};
 	Request->OnProcessRequestComplete().BindUObject(
 		this, &UStudyPadSubsystem::HandleResultResponse);
 	Request->ProcessRequest();
@@ -164,12 +188,71 @@ void UStudyPadSubsystem::ApplyServerStatus(
 	FString StatusText;
 	ResultObject.TryGetStringField(TEXT("status"), StatusText);
 	const EStudyReviewStatus NewStatus{ParseStatus(StatusText)};
-	if (NewStatus == CurrentReviewStatus)
+	if (NewStatus == EStudyReviewStatus::Reviewing)
+	{
+		HandleReviewing();
+	}
+	else
+	{
+		CurrentReviewStatus = NewStatus;
+		HandleOutcome(ResultObject);
+	}
+	bHasPolledResult = true;
+}
+
+void UStudyPadSubsystem::HandleReviewing()
+{
+	if (CurrentReviewStatus == EStudyReviewStatus::Reviewing)
 	{
 		return;
 	}
-	CurrentReviewStatus = NewStatus;
-	BroadcastStatusChange(ResultObject);
+	CurrentReviewStatus = EStudyReviewStatus::Reviewing;
+	OnReviewStarted.Broadcast();
+}
+
+void UStudyPadSubsystem::HandleOutcome(
+	const FJsonObject& ResultObject)
+{
+	if (CurrentReviewStatus == EStudyReviewStatus::Idle)
+	{
+		return;
+	}
+	const FString ResultKey{BuildResultKey(ResultObject)};
+	if (ResultKey == LastHandledResultKey)
+	{
+		return;
+	}
+	LastHandledResultKey = ResultKey;
+	if (bHasPolledResult)
+	{
+		BroadcastOutcome(ResultObject);
+	}
+}
+
+FString UStudyPadSubsystem::BuildResultKey(
+	const FJsonObject& ResultObject)
+{
+	FString ProblemId;
+	ResultObject.TryGetStringField(TEXT("problemId"), ProblemId);
+	double ElapsedSeconds{0.0};
+	ResultObject.TryGetNumberField(
+		TEXT("elapsedSeconds"), ElapsedSeconds);
+	const FString ElapsedText{FString::SanitizeFloat(ElapsedSeconds)};
+	return ProblemId + TEXT(":") + ElapsedText;
+}
+
+void UStudyPadSubsystem::BroadcastOutcome(
+	const FJsonObject& ResultObject)
+{
+	if (CurrentReviewStatus == EStudyReviewStatus::Finished)
+	{
+		OnReviewFinished.Broadcast(
+			FStudyReviewResult::FromJson(ResultObject));
+		return;
+	}
+	FString ErrorMessage;
+	ResultObject.TryGetStringField(TEXT("message"), ErrorMessage);
+	OnReviewFailed.Broadcast(ErrorMessage);
 }
 
 EStudyReviewStatus UStudyPadSubsystem::ParseStatus(
@@ -190,30 +273,14 @@ EStudyReviewStatus UStudyPadSubsystem::ParseStatus(
 	return EStudyReviewStatus::Idle;
 }
 
-void UStudyPadSubsystem::BroadcastStatusChange(
-	const FJsonObject& ResultObject)
-{
-	switch (CurrentReviewStatus)
-	{
-	case EStudyReviewStatus::Reviewing:
-		OnReviewStarted.Broadcast();
-		break;
-	case EStudyReviewStatus::Finished:
-		OnReviewFinished.Broadcast(
-			FStudyReviewResult::FromJson(ResultObject));
-		break;
-	case EStudyReviewStatus::Failed:
-		OnReviewFailed.Broadcast(
-			ResultObject.GetStringField(TEXT("message")));
-		break;
-	default:
-		break;
-	}
-}
-
 UTexture2D* UStudyPadSubsystem::GetLatestTexture() const
 {
 	return LatestTexture;
+}
+
+float UStudyPadSubsystem::GetLatestAspectRatio() const
+{
+	return LatestAspectRatio;
 }
 
 void UStudyPadSubsystem::Deinitialize()
