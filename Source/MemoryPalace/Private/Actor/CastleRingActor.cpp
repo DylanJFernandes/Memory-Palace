@@ -11,7 +11,7 @@
 namespace
 {
 	constexpr double FullCircleDegrees{360.0};
-	constexpr double ByteRange{255.0};
+	constexpr double HueByteRange{255.0};
 	constexpr double PathHeight{-2.0};
 	constexpr double UnitCubeSize{100.0};
 	constexpr double DefaultCastleSpacing{3218.0};
@@ -173,7 +173,7 @@ uint8 ACastleRingActor::GetCastleHue(int32 CastleIndex) const
 	const double OffsetFraction{
 		HueOffsetDegrees / FullCircleDegrees};
 	return static_cast<uint8>(
-		FMath::Frac(CastleFraction + OffsetFraction) * ByteRange);
+		FMath::Frac(CastleFraction + OffsetFraction) * HueByteRange);
 }
 
 double ACastleRingActor::GetCastleAngleDegrees(
