@@ -22,6 +22,21 @@ void AMemoryPalaceGameMode::BeginPlay()
 	BindToStudyPadSubsystem();
 }
 
+void AMemoryPalaceGameMode::StartProblem(const FString& ProblemId)
+{
+	if (!CachedStudyPadSubsystem.IsValid())
+	{
+		return;
+	}
+	CachedStudyPadSubsystem->StartProblem(ProblemId);
+	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
+	if (!StudyGameState)
+	{
+		return;
+	}
+	StudyGameState->SetActiveProblem(ProblemId);
+}
+
 void AMemoryPalaceGameMode::UnlockStartingSections()
 {
 	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
@@ -74,7 +89,7 @@ void AMemoryPalaceGameMode::AwardExperience(
 	}
 	const double ScaledExperience{
 		ExperiencePerDifficultyPoint * ReviewResult.DifficultyRating};
-	const int32 ExperienceAmount{FMath::RoundToInt(ScaledExperience)};
+	const int64 ExperienceAmount{FMath::RoundToInt(ScaledExperience)};
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Subject,
 		ReviewResult.GetSubjectTopicName(), ExperienceAmount);

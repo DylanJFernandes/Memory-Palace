@@ -23,6 +23,10 @@ public:
 	/* Sets default values for this game mode */
 	AMemoryPalaceGameMode();
 
+	/* Makes a problem the active one on the server and in the
+	   game state */
+	void StartProblem(const FString& ProblemId);
+
 protected:
 	/* Listens for reviews and starts the study pad polling */
 	virtual void BeginPlay() override;
