@@ -4,13 +4,6 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 
-UStudyGradeHistoryWidget::UStudyGradeHistoryWidget(
-	const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-	, CurrentPageIndex{0}
-{
-}
-
 void UStudyGradeHistoryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -18,31 +11,37 @@ void UStudyGradeHistoryWidget::NativeConstruct()
 		this, &UStudyGradeHistoryWidget::HandlePreviousClicked);
 	NextButton->OnClicked.AddDynamic(
 		this, &UStudyGradeHistoryWidget::HandleNextClicked);
+	StartNewButton->OnClicked.AddDynamic(
+		this, &UStudyGradeHistoryWidget::HandleStartNewClicked);
 }
 
-void UStudyGradeHistoryWidget::ShowSubmissions(
-	const FString& ProblemTitle,
-	const TArray<FStudySavedSubmission>& InSubmissions)
+void UStudyGradeHistoryWidget::HandleStartNewClicked()
+{
+	OnStartNewClicked.ExecuteIfBound();
+}
+
+void UStudyGradeHistoryWidget::HandlePreviousClicked()
+{
+	OnPreviousClicked.ExecuteIfBound();
+}
+
+void UStudyGradeHistoryWidget::HandleNextClicked()
+{
+	OnNextClicked.ExecuteIfBound();
+}
+
+void UStudyGradeHistoryWidget::SetProblemTitle(
+	const FString& ProblemTitle)
 {
 	ProblemTitleTextBlock->SetText(FText::FromString(ProblemTitle));
-	Submissions = InSubmissions;
-	CurrentPageIndex = FMath::Max(Submissions.Num() - 1, 0);
-	RefreshPage();
 }
 
-void UStudyGradeHistoryWidget::RefreshPage()
+void UStudyGradeHistoryWidget::ShowSubmission(
+	const FStudySavedSubmission& Submission, int32 PageNumber,
+	int32 PageCount)
 {
-	RefreshArrowButtons();
-	if (Submissions.IsEmpty())
-	{
-		ShowEmptyPage();
-		return;
-	}
-	const FStudySavedSubmission& Submission{
-		Submissions[CurrentPageIndex]};
-	PageTextBlock->SetText(FText::FromString(FString::Printf(
-		TEXT("Submission %d / %d"), CurrentPageIndex + 1,
-		Submissions.Num())));
+	PageTextBlock->SetText(FText::FromString(
+		BuildPageText(PageNumber, PageCount)));
 	ScoreTextBlock->SetText(
 		FText::FromString(BuildScoreText(Submission)));
 	DetailsTextBlock->SetText(
@@ -57,25 +56,15 @@ void UStudyGradeHistoryWidget::ShowEmptyPage()
 		TEXT("Submit your work to see your results here.")));
 }
 
-void UStudyGradeHistoryWidget::RefreshArrowButtons()
+FString UStudyGradeHistoryWidget::BuildPageText(
+	int32 PageNumber, int32 PageCount)
 {
-	PreviousButton->SetIsEnabled(CurrentPageIndex > 0);
-	NextButton->SetIsEnabled(
-		CurrentPageIndex < Submissions.Num() - 1);
-}
-
-void UStudyGradeHistoryWidget::HandlePreviousClicked()
-{
-	CurrentPageIndex = FMath::Max(CurrentPageIndex - 1, 0);
-	RefreshPage();
-}
-
-void UStudyGradeHistoryWidget::HandleNextClicked()
-{
-	const int32 LastPageIndex{FMath::Max(Submissions.Num() - 1, 0)};
-	CurrentPageIndex =
-		FMath::Min(CurrentPageIndex + 1, LastPageIndex);
-	RefreshPage();
+	const TCHAR* PreviousArrow{
+		PageNumber > 1 ? TEXT("<") : TEXT(" ")};
+	const TCHAR* NextArrow{
+		PageNumber < PageCount ? TEXT(">") : TEXT(" ")};
+	return FString::Printf(TEXT("%s  Submission %d / %d  %s"),
+		PreviousArrow, PageNumber, PageCount, NextArrow);
 }
 
 FString UStudyGradeHistoryWidget::BuildScoreText(

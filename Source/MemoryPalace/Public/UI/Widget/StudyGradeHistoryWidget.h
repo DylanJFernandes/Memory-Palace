@@ -10,8 +10,11 @@
 class UButton;
 class UTextBlock;
 
-/* Shows one problem's past submissions, one page each, with
-   arrows to move between them */
+/* Broadcast when an arrow button is clicked */
+DECLARE_DELEGATE(FStudyHistoryArrowClicked);
+
+/* Shows the grade of one past submission of a problem, with
+   arrow buttons to move between submissions */
 UCLASS()
 class MEMORYPALACE_API UStudyGradeHistoryWidget
 	: public UUserWidget
@@ -19,37 +22,46 @@ class MEMORYPALACE_API UStudyGradeHistoryWidget
 	GENERATED_BODY()
 
 public:
-	/* Sets default values for this widget */
-	UStudyGradeHistoryWidget(
-		const FObjectInitializer& ObjectInitializer);
+	/* Shows the name of the problem the history belongs to */
+	void SetProblemTitle(const FString& ProblemTitle);
 
-	/* Shows a problem's submissions, starting at the newest */
-	void ShowSubmissions(
-		const FString& ProblemTitle,
-		const TArray<FStudySavedSubmission>& InSubmissions);
+	/* Shows one submission and where it sits among all of them */
+	void ShowSubmission(const FStudySavedSubmission& Submission,
+						int32 PageNumber, int32 PageCount);
+
+	/* Shows the text for a problem without submissions */
+	void ShowEmptyPage();
+
+	/* Fires when the arrow to the older submission is clicked */
+	FStudyHistoryArrowClicked OnPreviousClicked;
+
+	/* Fires when the arrow to the newer submission is clicked */
+	FStudyHistoryArrowClicked OnNextClicked;
+
+	/* Fires when the button to start a new attempt is clicked */
+	FStudyHistoryArrowClicked OnStartNewClicked;
 
 protected:
 	/* Binds the arrow buttons */
 	virtual void NativeConstruct() override;
 
 private:
-	/* Fills the texts with the submission on the current page */
-	void RefreshPage();
-
-	/* Shows the page text for a problem without submissions */
-	void ShowEmptyPage();
-
-	/* Enables each arrow only if there is a page in its
-	   direction */
-	void RefreshArrowButtons();
-
-	/* Moves to the previous, older submission */
+	/* Tells the listener the previous arrow was clicked */
 	UFUNCTION()
 	void HandlePreviousClicked();
 
-	/* Moves to the next, newer submission */
+	/* Tells the listener the next arrow was clicked */
 	UFUNCTION()
 	void HandleNextClicked();
+
+	/* Tells the listener the start new attempt button was
+	   clicked */
+	UFUNCTION()
+	void HandleStartNewClicked();
+
+	/* Returns the page counter, with an arrow for each direction
+	   that has a page */
+	static FString BuildPageText(int32 PageNumber, int32 PageCount);
 
 	/* Returns the headline with the score and experience */
 	static FString BuildScoreText(
@@ -83,9 +95,7 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> NextButton;
 
-	/* Index of the submission being shown */
-	int32 CurrentPageIndex;
-
-	/* Submissions of the problem, oldest first */
-	TArray<FStudySavedSubmission> Submissions;
+	/* Button that starts a fresh attempt at the problem */
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> StartNewButton;
 };
