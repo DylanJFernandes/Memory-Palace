@@ -18,7 +18,7 @@
 
 namespace
 {
-	constexpr double FullCircleDegrees{360.0};
+	constexpr double SlotFullCircleDegrees{360.0};
 	constexpr double SecondsPerDay{86400.0};
 	const FName OrbTargetParameterName{TEXT("TargetLocation")};
 
@@ -135,8 +135,8 @@ double UStudyCastleComponent::GetAngleFromEntrance(
 	const double AngleDegrees{FMath::RadiansToDegrees(FMath::Atan2(
 		FVector::DotProduct(SlotDirection, LeftDirection),
 		FVector::DotProduct(SlotDirection, -WalkInDirection)))};
-	return AngleDegrees < 0.0 ? AngleDegrees + FullCircleDegrees
-							  : AngleDegrees;
+	return AngleDegrees < 0.0
+		? AngleDegrees + SlotFullCircleDegrees : AngleDegrees;
 }
 
 AStudyWhiteboardActor* UStudyCastleComponent::SpawnWhiteboard(
