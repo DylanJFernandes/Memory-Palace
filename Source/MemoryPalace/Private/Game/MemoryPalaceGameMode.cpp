@@ -140,7 +140,7 @@ int32 AMemoryPalaceGameMode::AwardExperience(
 	}
 	const double EarnedExperience{
 		ClaimCorrectPartsExperience(ReviewResult, *StudyPlayerState)};
-	const int32 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
+	const int64 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
 	if (ExperienceAmount <= 0)
 	{
 		return 0;
@@ -151,7 +151,7 @@ int32 AMemoryPalaceGameMode::AwardExperience(
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Section,
 		ReviewResult.GetSectionTopicName(), ExperienceAmount);
-	return ExperienceAmount;
+	return static_cast<int32>(ExperienceAmount);
 }
 
 double AMemoryPalaceGameMode::ClaimCorrectPartsExperience(
