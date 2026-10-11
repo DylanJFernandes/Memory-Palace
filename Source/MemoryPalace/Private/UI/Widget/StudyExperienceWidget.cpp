@@ -11,6 +11,13 @@ UStudyExperienceWidget::UStudyExperienceWidget(
 {
 }
 
+void UStudyExperienceWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	SetExperience(EStudyTopicKind::Subject, TEXT("Subject"), 0);
+	SetExperience(EStudyTopicKind::Section, TEXT("Section"), 0);
+}
+
 void UStudyExperienceWidget::SetExperience(
 	EStudyTopicKind TopicKind, FName TopicName,
 	int32 TotalExperience)

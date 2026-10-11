@@ -25,6 +25,10 @@ public:
 	void SetExperience(EStudyTopicKind TopicKind, FName TopicName,
 					   int32 TotalExperience);
 
+protected:
+	/* Shows empty bars until experience is earned */
+	virtual void NativeConstruct() override;
+
 private:
 	/* Returns the label with the topic, level and progress */
 	FText BuildLabel(FName TopicName, int32 TotalExperience) const;

@@ -3,6 +3,14 @@
 #include "UI/Widget/StudyFeedbackWidget.h"
 #include "Components/TextBlock.h"
 
+namespace
+{
+	bool IsPartCorrect(const FStudyPartResult& Part)
+	{
+		return Part.bIsCorrect;
+	}
+}
+
 void UStudyFeedbackWidget::ShowReviewing()
 {
 	ShowTexts(TEXT("Reviewing your work..."), FString{}, FString{});
@@ -40,6 +48,10 @@ FString UStudyFeedbackWidget::BuildStatusText(
 	if (ReviewResult.bIsCorrect)
 	{
 		return TEXT("Correct!");
+	}
+	if (ReviewResult.Parts.ContainsByPredicate(IsPartCorrect))
+	{
+		return TEXT("Partly correct");
 	}
 	return TEXT("Not quite");
 }
