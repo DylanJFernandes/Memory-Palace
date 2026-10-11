@@ -32,6 +32,12 @@ public:
 	virtual bool InputKey(
 		const FInputKeyEventArgs& Params) override;
 
+	/* Demo console command: moves the study clock forward by a
+	   number of days to show forgetting. Exec is required for a
+	   console command */
+	UFUNCTION(Exec)
+	void StudySkipDays(float Days);
+
 	/* Fires when the cursor becomes active */
 	FStudyCursorEvent OnCursorShown;
 

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Interfaces/IHttpRequest.h"
+#include "Data/StudyCurriculum.h"
 #include "Data/StudyReviewResult.h"
 #include "StudyPadSubsystem.generated.h"
 
@@ -37,6 +38,11 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FStudyReviewFailed,
    is being written; only the HUD listens, so it is not multicast */
 DECLARE_DELEGATE_OneParam(FStudyHintUpdated, const FString&);
 
+/* Fires once the course has been read from the server;
+   multicast because the game mode and the castle ring listen */
+DECLARE_MULTICAST_DELEGATE_OneParam(FStudyCurriculumLoaded,
+									const FStudyCurriculum&);
+
 /* Stage of the review as last reported by the server */
 enum class EStudyReviewStatus : uint8
 {
@@ -67,6 +73,10 @@ public:
 	/* Asks the server for a hint about the active problem */
 	void RequestHint();
 
+	/* Asks the server for the course, unless it already
+	   arrived, in which case it is announced again */
+	void RequestCurriculum();
+
 	/* Returns the newest image of a problem, or null if none
 	   arrived yet */
 	UTexture2D* GetTextureForProblem(
@@ -87,6 +97,9 @@ public:
 	/* Fires while a hint is requested and when it arrives */
 	FStudyHintUpdated OnHintUpdated;
 
+	/* Fires when the course has been read */
+	FStudyCurriculumLoaded OnCurriculumLoaded;
+
 protected:
 	/* Creates the subsystem only for game worlds */
 	virtual bool ShouldCreateSubsystem(
@@ -103,6 +116,11 @@ private:
 	/* Tells the server the game is closing, which ends the
 	   active problem */
 	void EndProblem();
+
+	/* Reads the course and announces it */
+	void HandleCurriculumResponse(FHttpRequestPtr Request,
+								  FHttpResponsePtr Response,
+								  bool bConnectedSuccessfully);
 
 	/* Turns each saved board PNG into the problem's texture */
 	void LoadSavedBoards();
@@ -190,6 +208,15 @@ private:
 
 	/* Key of the last finished or failed review announced */
 	FString LastHandledResultKey;
+
+	/* Course read from the server, empty until it arrives */
+	FStudyCurriculum Curriculum;
+
+	/* Whether the course has arrived */
+	bool bHasCurriculum;
+
+	/* Whether a course request is still waiting */
+	bool bIsCurriculumRequestInFlight;
 
 	/* Checksum of the last image decoded for each problem */
 	TMap<FString, uint32> LastImageChecksums;

@@ -103,6 +103,12 @@ const FString& UStudyWhiteboardComponent::GetProblemId() const
 	return ProblemId;
 }
 
+void UStudyWhiteboardComponent::SetProblemId(
+	const FString& InProblemId)
+{
+	ProblemId = InProblemId;
+}
+
 void UStudyWhiteboardComponent::ShowTexture(UTexture2D* WorkTexture)
 {
 	if (!WhiteboardMaterial)

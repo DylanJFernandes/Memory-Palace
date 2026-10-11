@@ -2,6 +2,11 @@
 
 #include "Actor/CastleRingActor.h"
 #include "Actor/CastleActor.h"
+#include "Component/StudyCastleComponent.h"
+#include "Engine/World.h"
+#include "Game/StudyPadSubsystem.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "NiagaraComponent.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -19,6 +24,8 @@ namespace
 	constexpr double DefaultPathStartRadius{2700.0};
 	constexpr double DefaultPathWidth{500.0};
 	constexpr double DefaultPathThickness{20.0};
+	const FName OrbColorParameterName{TEXT("OrbColor")};
+	const FName GlowColorParameterName{TEXT("GlowColor")};
 }
 
 ACastleRingActor::ACastleRingActor()
@@ -32,6 +39,7 @@ ACastleRingActor::ACastleRingActor()
 	, PathStartRadius{DefaultPathStartRadius}
 	, PathWidth{DefaultPathWidth}
 	, PathThickness{DefaultPathThickness}
+	, CompletedOrbColor{FLinearColor::Green}
 {
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -57,6 +65,135 @@ void ACastleRingActor::OnConstruction(const FTransform& Transform)
 			CreateCastleComponent(CastleIndex);
 		}
 		BuildPath(CastleIndex);
+	}
+}
+
+void ACastleRingActor::BeginPlay()
+{
+	Super::BeginPlay();
+	UStudyPadSubsystem* StudyPadSubsystem{
+		GetWorld()->GetSubsystem<UStudyPadSubsystem>()};
+	if (!StudyPadSubsystem)
+	{
+		return;
+	}
+	StudyPadSubsystem->OnCurriculumLoaded.AddUObject(
+		this, &ACastleRingActor::HandleCurriculumLoaded);
+	StudyPadSubsystem->RequestCurriculum();
+}
+
+void ACastleRingActor::HandleCurriculumLoaded(
+	const FStudyCurriculum& Curriculum)
+{
+	if (AssignedCastles.Num() > 0)
+	{
+		return;
+	}
+	const TArray<UStudyCastleComponent*> Castles{
+		GetCastlesInRingOrder()};
+	const int32 AssignedCount{
+		FMath::Min(Castles.Num(), Curriculum.Sections.Num())};
+	for (int32 CastleIndex{0}; CastleIndex < AssignedCount;
+		 ++CastleIndex)
+	{
+		UStudyCastleComponent* Castle{Castles[CastleIndex]};
+		Castle->AssignSection(Curriculum.Sections[CastleIndex],
+							  GetOrbTargetLocation());
+		Castle->OnCastleCompleted.BindUObject(
+			this, &ACastleRingActor::HandleCastleCompleted);
+		AssignedCastles.Add(Castle);
+	}
+}
+
+TArray<UStudyCastleComponent*>
+	ACastleRingActor::GetCastlesInRingOrder() const
+{
+	TArray<UChildActorComponent*> CastleComponents;
+	GetComponents(CastleComponents);
+	CastleComponents.Sort(
+		[this](const UChildActorComponent& Left,
+			   const UChildActorComponent& Right)
+		{
+			return GetCastleIndex(&Left) < GetCastleIndex(&Right);
+		});
+	TArray<UStudyCastleComponent*> Castles;
+	for (const UChildActorComponent* CastleComponent :
+		 CastleComponents)
+	{
+		const AActor* Castle{CastleComponent->GetChildActor()};
+		UStudyCastleComponent* StudyCastle{Castle
+			? Castle->FindComponentByClass<UStudyCastleComponent>()
+			: nullptr};
+		if (StudyCastle)
+		{
+			Castles.Add(StudyCastle);
+		}
+	}
+	return Castles;
+}
+
+int32 ACastleRingActor::GetCastleIndex(
+	const USceneComponent* CastleComponent) const
+{
+	const double Fraction{FMath::Frac(
+		CastleComponent->GetRelativeRotation().Yaw
+		/ FullCircleDegrees)};
+	return FMath::RoundToInt(Fraction * CastleCount) % CastleCount;
+}
+
+FVector ACastleRingActor::GetOrbTargetLocation() const
+{
+	const AActor* CenterOrb{CenterOrbActor.Get()};
+	return CenterOrb ? CenterOrb->GetActorLocation()
+					 : GetActorLocation();
+}
+
+void ACastleRingActor::HandleCastleCompleted()
+{
+	if (AreAllCastlesCompleted())
+	{
+		MakeCenterOrbGlowGreen();
+	}
+}
+
+bool ACastleRingActor::AreAllCastlesCompleted() const
+{
+	for (const TWeakObjectPtr<UStudyCastleComponent>& Castle :
+		 AssignedCastles)
+	{
+		if (Castle.IsValid() && !Castle->IsCompleted())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+void ACastleRingActor::MakeCenterOrbGlowGreen()
+{
+	AActor* CenterOrb{CenterOrbActor.Get()};
+	if (!CenterOrb)
+	{
+		return;
+	}
+	TArray<UNiagaraComponent*> ParticleComponents;
+	CenterOrb->GetComponents(ParticleComponents);
+	for (UNiagaraComponent* ParticleComponent : ParticleComponents)
+	{
+		ParticleComponent->SetVariableLinearColor(
+			OrbColorParameterName, CompletedOrbColor);
+	}
+	TArray<UStaticMeshComponent*> MeshComponents;
+	CenterOrb->GetComponents(MeshComponents);
+	for (UStaticMeshComponent* MeshComponent : MeshComponents)
+	{
+		UMaterialInstanceDynamic* Material{
+			MeshComponent->CreateDynamicMaterialInstance(0)};
+		if (Material)
+		{
+			Material->SetVectorParameterValue(
+				GlowColorParameterName, CompletedOrbColor);
+		}
 	}
 }
 

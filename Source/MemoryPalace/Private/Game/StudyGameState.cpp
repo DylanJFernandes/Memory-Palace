@@ -3,6 +3,7 @@
 #include "Game/StudyGameState.h"
 
 AStudyGameState::AStudyGameState()
+	: TotalSkippedTime{FTimespan::Zero()}
 {
 	PrimaryActorTick.bCanEverTick = false;
 }
@@ -31,4 +32,15 @@ void AStudyGameState::SetActiveProblem(const FString& ProblemId)
 const FString& AStudyGameState::GetActiveProblemId() const
 {
 	return ActiveProblemId;
+}
+
+void AStudyGameState::SkipStudyTime(const FTimespan& SkippedTime)
+{
+	TotalSkippedTime += SkippedTime;
+	OnStudyTimeSkipped.Broadcast();
+}
+
+FDateTime AStudyGameState::GetStudyNow() const
+{
+	return FDateTime::UtcNow() + TotalSkippedTime;
 }

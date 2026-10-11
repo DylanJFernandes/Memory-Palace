@@ -32,6 +32,10 @@ public:
 	/* Returns the id of the problem this whiteboard shows */
 	const FString& GetProblemId() const;
 
+	/* Sets the problem this whiteboard shows; call before play
+	   begins on the whiteboard */
+	void SetProblemId(const FString& InProblemId);
+
 protected:
 	/* Creates the material and listens for new images */
 	virtual void BeginPlay() override;

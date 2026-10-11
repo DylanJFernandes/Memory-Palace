@@ -28,6 +28,8 @@ namespace
 		TEXT("/end")};
 	constexpr const TCHAR* HintPath{
 		TEXT("/hint")};
+	constexpr const TCHAR* CurriculumPath{
+		TEXT("/curriculum.json")};
 	constexpr float HintTimeoutSeconds{60.0f};
 	constexpr int32 HttpStatusConflict{409};
 	constexpr float ImagePollIntervalSeconds{1.0f};
@@ -42,6 +44,8 @@ UStudyPadSubsystem::UStudyPadSubsystem()
 	, bIsResultRequestInFlight{false}
 	, bHasPolledResult{false}
 	, CurrentReviewStatus{EStudyReviewStatus::Idle}
+	, bHasCurriculum{false}
+	, bIsCurriculumRequestInFlight{false}
 {
 }
 
@@ -231,6 +235,48 @@ TSharedPtr<FJsonObject> UStudyPadSubsystem::ParseJsonObject(
 		TJsonReaderFactory<>::Create(JsonText)};
 	FJsonSerializer::Deserialize(Reader, JsonObject);
 	return JsonObject;
+}
+
+void UStudyPadSubsystem::RequestCurriculum()
+{
+	if (bHasCurriculum)
+	{
+		OnCurriculumLoaded.Broadcast(Curriculum);
+		return;
+	}
+	if (bIsCurriculumRequestInFlight)
+	{
+		return;
+	}
+	bIsCurriculumRequestInFlight = true;
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request{
+		CreateServerRequest(TEXT("GET"), CurriculumPath)};
+	Request->OnProcessRequestComplete().BindUObject(
+		this, &UStudyPadSubsystem::HandleCurriculumResponse);
+	Request->ProcessRequest();
+}
+
+void UStudyPadSubsystem::HandleCurriculumResponse(
+	FHttpRequestPtr Request, FHttpResponsePtr Response,
+	bool bConnectedSuccessfully)
+{
+	bIsCurriculumRequestInFlight = false;
+	const bool bHasUsableResponse{
+		bConnectedSuccessfully && Response.IsValid()
+		&& Response->GetResponseCode() == HttpStatusOk};
+	if (!bHasUsableResponse)
+	{
+		return;
+	}
+	const TSharedPtr<FJsonObject> CurriculumObject{
+		ParseJsonObject(Response->GetContentAsString())};
+	if (!CurriculumObject.IsValid())
+	{
+		return;
+	}
+	Curriculum = FStudyCurriculum::FromJson(*CurriculumObject);
+	bHasCurriculum = true;
+	OnCurriculumLoaded.Broadcast(Curriculum);
 }
 
 void UStudyPadSubsystem::RequestHint()

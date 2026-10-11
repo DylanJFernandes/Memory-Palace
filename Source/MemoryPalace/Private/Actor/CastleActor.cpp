@@ -3,6 +3,7 @@
 #include "Actor/CastleActor.h"
 #include "Actor/CastleRingActor.h"
 #include "Component/ProblemSlotComponent.h"
+#include "Component/StudyCastleComponent.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -27,6 +28,7 @@ ACastleActor::ACastleActor()
 		  FRotator::ZeroRotator, FVector{DoorOffset, 0.0, 0.0},
 		  FVector{DoorScale}}
 	, CastleHue{0}
+	, StudyCastleComponent{nullptr}
 {
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -34,6 +36,10 @@ ACastleActor::ACastleActor()
 		CreateDefaultSubobject<USceneComponent>(TEXT("Root"))};
 	RootSceneComponent->SetMobility(EComponentMobility::Static);
 	SetRootComponent(RootSceneComponent);
+
+	StudyCastleComponent =
+		CreateDefaultSubobject<UStudyCastleComponent>(
+			TEXT("StudyCastleComponent"));
 
 	StoneTint.Saturation = 0.45f;
 	StoneTint.Brightness = 3.1f;

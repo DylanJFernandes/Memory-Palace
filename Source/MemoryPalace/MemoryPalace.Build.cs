@@ -22,7 +22,8 @@ public class MemoryPalace : ModuleRules
 			"Slate",
 			"HTTP",
 			"Json",
-			"ProceduralMeshComponent"
+			"ProceduralMeshComponent",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

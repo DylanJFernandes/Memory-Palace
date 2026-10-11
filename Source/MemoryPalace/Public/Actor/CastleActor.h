@@ -12,6 +12,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
+class UStudyCastleComponent;
 
 /* Maps each base castle material to this castle's tinted copy */
 using FCastleMaterialMap = TMap<UMaterialInterface*,
@@ -108,6 +109,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Custom|Castle",
 			  meta = (ClampMin = "0", ClampMax = "255"))
 	uint8 CastleHue;
+
+	/* Section, whiteboards and progress effects of this castle */
+	UPROPERTY(VisibleAnywhere, Category = "Custom|Components")
+	TObjectPtr<UStudyCastleComponent> StudyCastleComponent;
 
 	/* Pieces and door built by the last rebuild */
 	UPROPERTY(Transient)

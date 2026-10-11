@@ -15,6 +15,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FStudySectionUnlocked, FName);
 DECLARE_MULTICAST_DELEGATE_OneParam(FStudyActiveProblemChanged,
 									const FString&);
 
+/* Fires after the study clock was moved forward; multicast
+   because every castle listens */
+DECLARE_MULTICAST_DELEGATE(FStudyTimeSkipped);
+
 /* Holds the state of the study world that every system shares */
 UCLASS()
 class MEMORYPALACE_API AStudyGameState : public AGameStateBase
@@ -37,11 +41,21 @@ public:
 	/* Returns the id of the problem being worked on */
 	const FString& GetActiveProblemId() const;
 
+	/* Moves the study clock forward, to show how unstudied
+	   castles decay over time */
+	void SkipStudyTime(const FTimespan& SkippedTime);
+
+	/* Returns the current time on the study clock */
+	FDateTime GetStudyNow() const;
+
 	/* Fires when a section unlocks */
 	FStudySectionUnlocked OnSectionUnlocked;
 
 	/* Fires when the active problem changes */
 	FStudyActiveProblemChanged OnActiveProblemChanged;
+
+	/* Fires when the study clock moves forward */
+	FStudyTimeSkipped OnStudyTimeSkipped;
 
 private:
 	/* Names of the sections the student can enter */
@@ -49,4 +63,7 @@ private:
 
 	/* Id of the problem being worked on, empty if none */
 	FString ActiveProblemId;
+
+	/* Time added to the real clock by the demo time skip */
+	FTimespan TotalSkippedTime;
 };

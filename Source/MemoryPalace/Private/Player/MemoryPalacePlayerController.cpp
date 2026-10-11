@@ -7,6 +7,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Game/MemoryPalaceGameMode.h"
+#include "Game/StudyGameState.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Interaction/StudyInteractable.h"
@@ -294,4 +295,15 @@ bool AMemoryPalacePlayerController::ShouldUseTouchControls() const
 {
 	// are we on a mobile platform? Should we force touch?
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
+}
+
+void AMemoryPalacePlayerController::StudySkipDays(float Days)
+{
+	AStudyGameState* StudyGameState{
+		GetWorld()->GetGameState<AStudyGameState>()};
+	if (!StudyGameState)
+	{
+		return;
+	}
+	StudyGameState->SkipStudyTime(FTimespan::FromDays(Days));
 }

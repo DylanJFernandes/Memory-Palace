@@ -1,7 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Game/MemoryPalaceGameMode.h"
-#include "Data/StudyCurriculumDataAsset.h"
 #include "Engine/World.h"
 #include "Game/StudyGameState.h"
 #include "Game/StudyPadSubsystem.h"
@@ -13,6 +12,7 @@ AMemoryPalaceGameMode::AMemoryPalaceGameMode()
 	: ExperiencePerDifficultyPoint{50}
 	, MinimumRepeatFraction{0.1f}
 	, RepeatRecoverySeconds{3600.0f}
+	, UnlockExperienceThreshold{10}
 {
 	GameStateClass = AStudyGameState::StaticClass();
 	PlayerStateClass = AStudyPlayerState::StaticClass();
@@ -38,7 +38,6 @@ void AMemoryPalaceGameMode::BeginPlay()
 	Super::BeginPlay();
 	CachedProgressSubsystem =
 		GetWorld()->GetSubsystem<UStudyProgressSubsystem>();
-	UnlockStartingSections();
 	BindToStudyPadSubsystem();
 }
 
@@ -68,23 +67,6 @@ void AMemoryPalaceGameMode::RequestHint()
 	CachedStudyPadSubsystem->RequestHint();
 }
 
-void AMemoryPalaceGameMode::UnlockStartingSections()
-{
-	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
-	if (!StudyGameState || !Curriculum)
-	{
-		return;
-	}
-	for (const FStudySectionDefinition& Section :
-		 Curriculum->GetSections())
-	{
-		if (Section.PrerequisiteSectionName.IsNone())
-		{
-			StudyGameState->UnlockSection(Section.SectionName);
-		}
-	}
-}
-
 void AMemoryPalaceGameMode::BindToStudyPadSubsystem()
 {
 	UStudyPadSubsystem* StudyPadSubsystem{
@@ -96,7 +78,17 @@ void AMemoryPalaceGameMode::BindToStudyPadSubsystem()
 	CachedStudyPadSubsystem = StudyPadSubsystem;
 	StudyPadSubsystem->OnReviewFinished.AddUObject(
 		this, &AMemoryPalaceGameMode::HandleReviewFinished);
+	StudyPadSubsystem->OnCurriculumLoaded.AddUObject(
+		this, &AMemoryPalaceGameMode::HandleCurriculumLoaded);
 	StudyPadSubsystem->StartPolling();
+	StudyPadSubsystem->RequestCurriculum();
+}
+
+void AMemoryPalaceGameMode::HandleCurriculumLoaded(
+	const FStudyCurriculum& LoadedCurriculum)
+{
+	Curriculum = LoadedCurriculum;
+	UnlockEligibleSections();
 }
 
 void AMemoryPalaceGameMode::HandleReviewFinished(
@@ -180,7 +172,7 @@ double AMemoryPalaceGameMode::ClaimCorrectPartsExperience(
 			ComputeFreshness(StudyPlayerState, PartKey)};
 		EarnedExperience += PartExperience * Freshness;
 		StudyPlayerState.RecordPartAward(
-			PartKey, FDateTime::UtcNow());
+			PartKey, GetStudyNow());
 	}
 	return EarnedExperience;
 }
@@ -196,7 +188,7 @@ double AMemoryPalaceGameMode::ComputeFreshness(
 		return 1.0;
 	}
 	const double SecondsSinceAward{
-		(FDateTime::UtcNow() - LastAwardTime.GetValue())
+		(GetStudyNow() - LastAwardTime.GetValue())
 			.GetTotalSeconds()};
 	const double RecoveredFraction{FMath::Clamp(
 		SecondsSinceAward / RepeatRecoverySeconds, 0.0, 1.0)};
@@ -208,34 +200,38 @@ double AMemoryPalaceGameMode::ComputeFreshness(
 void AMemoryPalaceGameMode::UnlockEligibleSections()
 {
 	AStudyGameState* StudyGameState{GetGameState<AStudyGameState>()};
-	if (!StudyGameState || !Curriculum)
+	if (!StudyGameState)
 	{
 		return;
 	}
-	for (const FStudySectionDefinition& Section :
-		 Curriculum->GetSections())
+	for (int32 SectionIndex{0};
+		 SectionIndex < Curriculum.Sections.Num(); ++SectionIndex)
 	{
-		if (IsPrerequisiteMet(Section))
+		if (IsPreviousSectionMastered(SectionIndex))
 		{
-			StudyGameState->UnlockSection(Section.SectionName);
+			StudyGameState->UnlockSection(FName{
+				Curriculum.Sections[SectionIndex].SectionName});
 		}
 	}
 }
 
-bool AMemoryPalaceGameMode::IsPrerequisiteMet(
-	const FStudySectionDefinition& Section) const
+bool AMemoryPalaceGameMode::IsPreviousSectionMastered(
+	int32 SectionIndex) const
 {
+	if (SectionIndex == 0)
+	{
+		return true;
+	}
 	const AStudyPlayerState* StudyPlayerState{GetStudyPlayerState()};
-	if (!StudyPlayerState || Section.PrerequisiteSectionName.IsNone())
+	if (!StudyPlayerState)
 	{
 		return false;
 	}
-	const int32 PrerequisiteExperience{
-		StudyPlayerState->GetExperience(
-			EStudyTopicKind::Section,
-			Section.PrerequisiteSectionName)};
-	return PrerequisiteExperience
-		>= Section.RequiredPrerequisiteExperience;
+	const FName PreviousSectionName{
+		Curriculum.Sections[SectionIndex - 1].SectionName};
+	return StudyPlayerState->GetExperience(
+			   EStudyTopicKind::Section, PreviousSectionName)
+		>= UnlockExperienceThreshold;
 }
 
 AStudyPlayerState* AMemoryPalaceGameMode::GetStudyPlayerState() const
@@ -257,4 +253,15 @@ void AMemoryPalaceGameMode::EndPlay(
 		CachedStudyPadSubsystem->OnReviewFinished.RemoveAll(this);
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+FDateTime AMemoryPalaceGameMode::GetStudyNow() const
+{
+	const AStudyGameState* StudyGameState{
+		GetGameState<AStudyGameState>()};
+	if (!StudyGameState)
+	{
+		return FDateTime::UtcNow();
+	}
+	return StudyGameState->GetStudyNow();
 }

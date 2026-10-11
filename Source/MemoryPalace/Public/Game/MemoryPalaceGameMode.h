@@ -3,16 +3,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/StudyCurriculum.h"
 #include "Data/StudyReviewResult.h"
 #include "GameFramework/GameModeBase.h"
 #include "MemoryPalaceGameMode.generated.h"
 
 class AStudyGameState;
 class AStudyPlayerState;
-class UStudyCurriculumDataAsset;
 class UStudyPadSubsystem;
 class UStudyProgressSubsystem;
-struct FStudySectionDefinition;
 
 /* Game mode that owns the rules of a study world */
 UCLASS(abstract)
@@ -46,8 +45,9 @@ private:
 	/* Listens for finished reviews, then starts polling */
 	void BindToStudyPadSubsystem();
 
-	/* Unlocks every section that has no prerequisite */
-	void UnlockStartingSections();
+	/* Keeps the course and unlocks what it allows */
+	void HandleCurriculumLoaded(
+		const FStudyCurriculum& LoadedCurriculum);
 
 	/* Rewards a correct review and unlocks what it opened */
 	void HandleReviewFinished(const FStudyReviewResult& ReviewResult);
@@ -77,13 +77,17 @@ private:
 		const AStudyPlayerState& StudyPlayerState,
 		const FString& PartKey) const;
 
-	/* Unlocks every section whose prerequisite has enough
-	   experience */
+	/* Unlocks the first section, and every later section whose
+	   previous section has enough experience */
 	void UnlockEligibleSections();
 
-	/* Returns whether the prerequisite has enough experience */
-	bool IsPrerequisiteMet(
-		const FStudySectionDefinition& Section) const;
+	/* Returns whether the section before this one has enough
+	   experience */
+	bool IsPreviousSectionMastered(int32 SectionIndex) const;
+
+	/* Returns the time on the study clock, which the demo time
+	   skip can move forward */
+	FDateTime GetStudyNow() const;
 
 	/* Returns the first player's study player state, if any */
 	AStudyPlayerState* GetStudyPlayerState() const;
@@ -101,9 +105,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Rules")
 	float RepeatRecoverySeconds;
 
-	/* Sections of the course and their unlock thresholds */
+	/* Experience a section needs before the next one unlocks;
+	   kept very low for the demo */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Rules")
-	TObjectPtr<UStudyCurriculumDataAsset> Curriculum;
+	int32 UnlockExperienceThreshold;
+
+	/* Course read from the server */
+	FStudyCurriculum Curriculum;
 
 	/* Parts that already earned experience since the problem was
 	   last started, so submitting again cannot earn it twice */
