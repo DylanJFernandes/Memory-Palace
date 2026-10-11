@@ -10,6 +10,8 @@
 
 AMemoryPalaceGameMode::AMemoryPalaceGameMode()
 	: ExperiencePerDifficultyPoint{50}
+	, MinimumRepeatFraction{0.1f}
+	, RepeatRecoverySeconds{3600.0f}
 {
 	GameStateClass = AStudyGameState::StaticClass();
 	PlayerStateClass = AStudyPlayerState::StaticClass();
@@ -71,10 +73,6 @@ void AMemoryPalaceGameMode::BindToStudyPadSubsystem()
 void AMemoryPalaceGameMode::HandleReviewFinished(
 	const FStudyReviewResult& ReviewResult)
 {
-	if (!ReviewResult.bIsCorrect)
-	{
-		return;
-	}
 	AwardExperience(ReviewResult);
 	UnlockEligibleSections();
 }
@@ -83,19 +81,69 @@ void AMemoryPalaceGameMode::AwardExperience(
 	const FStudyReviewResult& ReviewResult)
 {
 	AStudyPlayerState* StudyPlayerState{GetStudyPlayerState()};
-	if (!StudyPlayerState)
+	if (!StudyPlayerState || ReviewResult.Parts.IsEmpty())
 	{
 		return;
 	}
-	const double ScaledExperience{
-		ExperiencePerDifficultyPoint * ReviewResult.DifficultyRating};
-	const int64 ExperienceAmount{FMath::RoundToInt(ScaledExperience)};
+	const double EarnedExperience{
+		ClaimCorrectPartsExperience(ReviewResult, *StudyPlayerState)};
+	const int32 ExperienceAmount{FMath::RoundToInt(EarnedExperience)};
+	if (ExperienceAmount <= 0)
+	{
+		return;
+	}
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Subject,
 		ReviewResult.GetSubjectTopicName(), ExperienceAmount);
 	StudyPlayerState->AddExperience(
 		EStudyTopicKind::Section,
 		ReviewResult.GetSectionTopicName(), ExperienceAmount);
+}
+
+double AMemoryPalaceGameMode::ClaimCorrectPartsExperience(
+	const FStudyReviewResult& ReviewResult,
+	AStudyPlayerState& StudyPlayerState)
+{
+	const double ProblemExperience{
+		ExperiencePerDifficultyPoint * ReviewResult.DifficultyRating};
+	const double PartExperience{
+		ProblemExperience / ReviewResult.Parts.Num()};
+	double EarnedExperience{0.0};
+	for (const FStudyPartResult& Part : ReviewResult.Parts)
+	{
+		if (!Part.bIsCorrect)
+		{
+			continue;
+		}
+		const FString PartKey{
+			ReviewResult.ProblemId + TEXT(":") + Part.Id};
+		const double Freshness{
+			ComputeFreshness(StudyPlayerState, PartKey)};
+		EarnedExperience += PartExperience * Freshness;
+		StudyPlayerState.RecordPartAward(
+			PartKey, FDateTime::UtcNow());
+	}
+	return EarnedExperience;
+}
+
+double AMemoryPalaceGameMode::ComputeFreshness(
+	const AStudyPlayerState& StudyPlayerState,
+	const FString& PartKey) const
+{
+	const TOptional<FDateTime> LastAwardTime{
+		StudyPlayerState.GetLastPartAwardTime(PartKey)};
+	if (!LastAwardTime.IsSet() || RepeatRecoverySeconds <= 0.0f)
+	{
+		return 1.0;
+	}
+	const double SecondsSinceAward{
+		(FDateTime::UtcNow() - LastAwardTime.GetValue())
+			.GetTotalSeconds()};
+	const double RecoveredFraction{FMath::Clamp(
+		SecondsSinceAward / RepeatRecoverySeconds, 0.0, 1.0)};
+	return FMath::Lerp(
+		static_cast<double>(MinimumRepeatFraction), 1.0,
+		RecoveredFraction);
 }
 
 void AMemoryPalaceGameMode::UnlockEligibleSections()
