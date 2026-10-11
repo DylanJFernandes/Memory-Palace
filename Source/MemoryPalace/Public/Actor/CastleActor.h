@@ -28,18 +28,17 @@ public:
 	/* Sets default values for this castle */
 	ACastleActor();
 
-	/* Tints the castle with a hue and rebuilds it */
-	void SetCastleHue(uint8 InCastleHue);
-
 	/* Returns how many problems this castle can hold */
 	int32 GetProblemCapacity() const;
 
-protected:
 	/* Rebuilds the castle from the current settings */
 	virtual void OnConstruction(
 		const FTransform& Transform) override;
 
 private:
+	/* Clears and recreates the pieces and door */
+	void RebuildCastle();
+
 	/* Destroys the pieces and door built last time */
 	void ClearGeneratedComponents();
 
@@ -61,12 +60,16 @@ private:
 	void ApplyMaterials(UStaticMeshComponent* MeshComponent,
 						const FCastleMaterialMap& Materials);
 
+	/* Returns the hue given by the ring this castle stands in, or
+	   this castle's own hue when it stands alone */
+	uint8 ResolveCastleHue() const;
+
 	/* Creates the tinted material copies for this castle */
-	FCastleMaterialMap CreateCastleMaterials();
+	FCastleMaterialMap CreateCastleMaterials(uint8 Hue);
 
 	/* Creates a copy of a base material tinted with a hue */
 	UMaterialInstanceDynamic* CreateTintedMaterial(
-		const FCastleTintSettings& TintSettings);
+		const FCastleTintSettings& TintSettings, uint8 Hue);
 
 	/* Pieces that make up the castle */
 	UPROPERTY(EditAnywhere, Category = "Custom|Castle")
@@ -100,7 +103,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Custom|Door")
 	FTransform DoorRelativeTransform;
 
-	/* Hue of this castle on the color wheel, 0 to 255 */
+	/* Hue on the color wheel, 0 to 255, used when the castle is
+	   placed alone. A castle in a ring takes its hue from the ring */
+	UPROPERTY(EditAnywhere, Category = "Custom|Castle",
+			  meta = (ClampMin = "0", ClampMax = "255"))
 	uint8 CastleHue;
 
 	/* Pieces and door built by the last rebuild */

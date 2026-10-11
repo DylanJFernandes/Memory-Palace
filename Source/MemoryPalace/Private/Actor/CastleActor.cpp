@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Actor/CastleActor.h"
+#include "Actor/CastleRingActor.h"
 #include "Component/ProblemSlotComponent.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/SceneComponent.h"
@@ -49,12 +50,18 @@ ACastleActor::ACastleActor()
 void ACastleActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	RebuildCastle();
+}
+
+void ACastleActor::RebuildCastle()
+{
 	ClearGeneratedComponents();
 	if (!CastleLayout)
 	{
 		return;
 	}
-	const FCastleMaterialMap Materials{CreateCastleMaterials()};
+	const FCastleMaterialMap Materials{
+		CreateCastleMaterials(ResolveCastleHue())};
 	CreatePieces(Materials);
 	CreateDoor(Materials);
 }
@@ -69,6 +76,19 @@ void ACastleActor::ClearGeneratedComponents()
 		}
 	}
 	GeneratedComponents.Reset();
+
+	/* The list is transient, so components saved in the level or
+	   copied into play are found by how they were created */
+	TArray<UActorComponent*> StaleComponents;
+	GetComponents(StaleComponents);
+	for (UActorComponent* Component : StaleComponents)
+	{
+		if (Component->CreationMethod ==
+			EComponentCreationMethod::UserConstructionScript)
+		{
+			Component->DestroyComponent();
+		}
+	}
 }
 
 void ACastleActor::CreatePieces(const FCastleMaterialMap& Materials)
@@ -148,7 +168,19 @@ void ACastleActor::TintDoorActor(
 	}
 }
 
-FCastleMaterialMap ACastleActor::CreateCastleMaterials()
+uint8 ACastleActor::ResolveCastleHue() const
+{
+	const ACastleRingActor* Ring{
+		Cast<ACastleRingActor>(GetParentActor())};
+	uint8 RingHue{0};
+	if (Ring && Ring->FindCastleHue(GetParentComponent(), RingHue))
+	{
+		return RingHue;
+	}
+	return CastleHue;
+}
+
+FCastleMaterialMap ACastleActor::CreateCastleMaterials(uint8 Hue)
 {
 	const TArray<const FCastleTintSettings*> AllTintSettings{
 		&StoneTint, &RoofTint, &FloorTint, &GlassTint, &DoorTint};
@@ -159,19 +191,19 @@ FCastleMaterialMap ACastleActor::CreateCastleMaterials()
 		if (TintSettings->BaseMaterial)
 		{
 			Materials.Add(TintSettings->BaseMaterial,
-						  CreateTintedMaterial(*TintSettings));
+						  CreateTintedMaterial(*TintSettings, Hue));
 		}
 	}
 	return Materials;
 }
 
 UMaterialInstanceDynamic* ACastleActor::CreateTintedMaterial(
-	const FCastleTintSettings& TintSettings)
+	const FCastleTintSettings& TintSettings, uint8 Hue)
 {
 	const uint8 Saturation{static_cast<uint8>(
 		FMath::RoundToInt(TintSettings.Saturation * ByteRange))};
 	const FLinearColor Tint{
-		FLinearColor::MakeFromHSV8(CastleHue, Saturation, 255)
+		FLinearColor::MakeFromHSV8(Hue, Saturation, 255)
 		* TintSettings.Brightness};
 
 	UMaterialInstanceDynamic* TintedMaterial{
@@ -180,12 +212,6 @@ UMaterialInstanceDynamic* ACastleActor::CreateTintedMaterial(
 	TintedMaterial->SetVectorParameterValue(TintParameterName, Tint);
 	TintedMaterial->SetVectorParameterValue(ColorParameterName, Tint);
 	return TintedMaterial;
-}
-
-void ACastleActor::SetCastleHue(uint8 InCastleHue)
-{
-	CastleHue = InCastleHue;
-	RerunConstructionScripts();
 }
 
 int32 ACastleActor::GetProblemCapacity() const

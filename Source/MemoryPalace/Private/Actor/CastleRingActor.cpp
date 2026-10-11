@@ -52,7 +52,10 @@ void ACastleRingActor::OnConstruction(const FTransform& Transform)
 	for (int32 CastleIndex{0}; CastleIndex < CastleCount;
 		 ++CastleIndex)
 	{
-		BuildCastle(CastleIndex);
+		if (CastleClass)
+		{
+			CreateCastleComponent(CastleIndex);
+		}
 		BuildPath(CastleIndex);
 	}
 }
@@ -67,23 +70,37 @@ void ACastleRingActor::ClearGeneratedComponents()
 		}
 	}
 	GeneratedComponents.Reset();
+
+	/* The list is transient, so components saved in the level or
+	   copied into play are found by how they were created */
+	TArray<UActorComponent*> StaleComponents;
+	GetComponents(StaleComponents);
+	for (UActorComponent* Component : StaleComponents)
+	{
+		if (Component->CreationMethod ==
+			EComponentCreationMethod::UserConstructionScript)
+		{
+			Component->DestroyComponent();
+		}
+	}
 }
 
-void ACastleRingActor::BuildCastle(int32 CastleIndex)
+bool ACastleRingActor::FindCastleHue(
+	const USceneComponent* CastleComponent, uint8& OutHue) const
 {
-	if (!CastleClass)
+	if (!CastleComponent || CastleCount < 1)
 	{
-		return;
+		return false;
 	}
-	UChildActorComponent* CastleComponent{
-		CreateCastleComponent(CastleIndex)};
-	ACastleActor* Castle{
-		Cast<ACastleActor>(CastleComponent->GetChildActor())};
-	if (!Castle)
-	{
-		return;
-	}
-	Castle->SetCastleHue(GetCastleHue(CastleIndex));
+	/* Read back from the castle's angle, which survives play and
+	   saving, unlike a lookup table kept in memory */
+	const double Fraction{FMath::Frac(
+		CastleComponent->GetRelativeRotation().Yaw
+		/ FullCircleDegrees)};
+	const int32 CastleIndex{
+		FMath::RoundToInt(Fraction * CastleCount) % CastleCount};
+	OutHue = GetCastleHue(CastleIndex);
+	return true;
 }
 
 UChildActorComponent* ACastleRingActor::CreateCastleComponent(
@@ -100,6 +117,10 @@ UChildActorComponent* ACastleRingActor::CreateCastleComponent(
 	CastleComponent->CreationMethod =
 		EComponentCreationMethod::UserConstructionScript;
 	CastleComponent->SetChildActorClass(CastleClass);
+
+	/* Static like the castle's root, or the castle cannot attach */
+	CastleComponent->SetMobility(EComponentMobility::Static);
+
 	CastleComponent->SetupAttachment(GetRootComponent());
 	CastleComponent->SetRelativeLocationAndRotation(
 		Location, Rotation);

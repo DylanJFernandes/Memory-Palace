@@ -9,6 +9,7 @@
 class ACastleActor;
 class UChildActorComponent;
 class UMaterialInterface;
+class USceneComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 
@@ -23,7 +24,11 @@ public:
 	/* Sets default values for this ring */
 	ACastleRingActor();
 
-protected:
+	/* Works out the hue of the castle that stands in a child actor
+	   component of this ring from its angle */
+	bool FindCastleHue(const USceneComponent* CastleComponent,
+					   uint8& OutHue) const;
+
 	/* Rebuilds every castle and path from the current settings */
 	virtual void OnConstruction(
 		const FTransform& Transform) override;
@@ -31,9 +36,6 @@ protected:
 private:
 	/* Destroys the castles and paths built last time */
 	void ClearGeneratedComponents();
-
-	/* Builds one castle and gives it its own color */
-	void BuildCastle(int32 CastleIndex);
 
 	/* Spawns the castle actor of one castle around the center */
 	UChildActorComponent* CreateCastleComponent(int32 CastleIndex);
