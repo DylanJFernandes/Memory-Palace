@@ -13,7 +13,6 @@ namespace
 
 UStudyWhiteboardComponent::UStudyWhiteboardComponent()
 	: TextureParameterName{TEXT("WhiteboardTexture")}
-	, InitialMeshScale{FVector::OneVector}
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -33,8 +32,6 @@ void UStudyWhiteboardComponent::CreateWhiteboardMaterial()
 	{
 		return;
 	}
-	CachedWhiteboardMesh = WhiteboardMesh;
-	InitialMeshScale = WhiteboardMesh->GetRelativeScale3D();
 	WhiteboardMaterial =
 		WhiteboardMesh->CreateAndSetMaterialInstanceDynamic(
 			WhiteboardMaterialSlotIndex);
@@ -65,19 +62,6 @@ void UStudyWhiteboardComponent::HandleWorkImageUpdated(
 	}
 	WhiteboardMaterial->SetTextureParameterValue(
 		TextureParameterName, WorkTexture);
-	ApplyAspectRatio(AspectRatio);
-}
-
-void UStudyWhiteboardComponent::ApplyAspectRatio(
-	float AspectRatio)
-{
-	if (!CachedWhiteboardMesh.IsValid())
-	{
-		return;
-	}
-	FVector NewScale{InitialMeshScale};
-	NewScale.Y = InitialMeshScale.Z * AspectRatio;
-	CachedWhiteboardMesh->SetRelativeScale3D(NewScale);
 }
 
 void UStudyWhiteboardComponent::EndPlay(

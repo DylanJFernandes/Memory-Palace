@@ -7,7 +7,6 @@
 #include "StudyWhiteboardComponent.generated.h"
 
 class UMaterialInstanceDynamic;
-class UStaticMeshComponent;
 class UStudyPadSubsystem;
 class UTexture2D;
 
@@ -32,21 +31,16 @@ protected:
 
 private:
 	/* Replaces the owner's first mesh material with a dynamic
-	   instance and remembers the mesh's starting scale */
+	   instance */
 	void CreateWhiteboardMaterial();
 
 	/* Subscribes to the study pad subsystem and shows its
 	   current image */
 	void BindToStudyPadSubsystem();
 
-	/* Applies a newly received image to the material and
-	   reshapes the mesh to fit it */
+	/* Applies a newly received image to the material */
 	void HandleWorkImageUpdated(UTexture2D* WorkTexture,
 								float AspectRatio);
-
-	/* Stretches the mesh's local Y axis to the aspect ratio while
-	   keeping its local Z axis as the height */
-	void ApplyAspectRatio(float AspectRatio);
 
 	/* Name of the material's texture parameter to set */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Whiteboard")
@@ -56,13 +50,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> WhiteboardMaterial;
 
-	/* Scale the mesh had before any image arrived */
-	FVector InitialMeshScale;
-
 	// Cached Vars
-	/* Mesh that shows the whiteboard image */
-	TWeakObjectPtr<UStaticMeshComponent> CachedWhiteboardMesh;
-
 	/* Subsystem this component is subscribed to */
 	TWeakObjectPtr<UStudyPadSubsystem> CachedStudyPadSubsystem;
 };
