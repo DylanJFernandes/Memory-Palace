@@ -15,7 +15,8 @@ FStudyVisual::FStudyVisual()
 }
 
 FStudyReviewResult::FStudyReviewResult()
-	: ElapsedSeconds{0.0}
+	: DifficultyRating{1.0}
+	, ElapsedSeconds{0.0}
 	, bIsCorrect{false}
 	, bIsPlaceholder{false}
 {
@@ -27,8 +28,12 @@ FStudyReviewResult FStudyReviewResult::FromJson(
 	FStudyReviewResult Result;
 	Result.ProblemId = ReadString(JsonObject, TEXT("problemId"));
 	Result.SectionId = ReadString(JsonObject, TEXT("sectionId"));
+	Result.SubjectName = ReadString(JsonObject, TEXT("subjectName"));
+	Result.SectionName = ReadString(JsonObject, TEXT("sectionName"));
+	Result.DifficultyRating = ReadNumber(
+		JsonObject, TEXT("difficultyRating"), 1.0);
 	Result.ElapsedSeconds =
-		ReadNumber(JsonObject, TEXT("elapsedSeconds"));
+		ReadNumber(JsonObject, TEXT("elapsedSeconds"), 0.0);
 	Result.bIsCorrect = ReadBool(JsonObject, TEXT("isCorrect"));
 	Result.bIsPlaceholder =
 		ReadBool(JsonObject, TEXT("isPlaceholder"));
@@ -133,9 +138,10 @@ bool FStudyReviewResult::ReadBool(
 }
 
 double FStudyReviewResult::ReadNumber(
-	const FJsonObject& JsonObject, const TCHAR* FieldName)
+	const FJsonObject& JsonObject, const TCHAR* FieldName,
+	double FallbackValue)
 {
-	double Value{0.0};
+	double Value{FallbackValue};
 	JsonObject.TryGetNumberField(FieldName, Value);
 	return Value;
 }

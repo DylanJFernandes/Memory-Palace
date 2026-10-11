@@ -64,6 +64,15 @@ struct FStudyReviewResult
 	/* Identifier of the section the problem belongs to */
 	FString SectionId;
 
+	/* Broad subject of the problem, such as Precalculus */
+	FString SubjectName;
+
+	/* Readable name of the section, such as Quadratic Functions */
+	FString SectionName;
+
+	/* How hard the AI rated the problem; experience scales by it */
+	double DifficultyRating;
+
 	/* Seconds between starting the problem and submitting */
 	double ElapsedSeconds;
 
@@ -97,9 +106,10 @@ private:
 	static bool ReadBool(const FJsonObject& JsonObject,
 						 const TCHAR* FieldName);
 
-	/* Reads a number field, returning zero when it is missing */
+	/* Reads a number field, returning the fallback when missing */
 	static double ReadNumber(const FJsonObject& JsonObject,
-							 const TCHAR* FieldName);
+							 const TCHAR* FieldName,
+							 double FallbackValue);
 
 	/* Reads a list of text values, returning empty when missing */
 	static TArray<FString> ReadStringArray(
