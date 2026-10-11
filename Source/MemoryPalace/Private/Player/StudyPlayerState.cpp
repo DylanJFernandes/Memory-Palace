@@ -8,19 +8,30 @@ AStudyPlayerState::AStudyPlayerState()
 }
 
 void AStudyPlayerState::AddExperience(
-	FName TopicName, int32 ExperienceAmount)
+	EStudyTopicKind TopicKind, FName TopicName,
+	int32 ExperienceAmount)
 {
-	int32& TopicExperience{ExperienceByTopic.FindOrAdd(TopicName)};
-	TopicExperience += ExperienceAmount;
-	OnExperienceChanged.ExecuteIfBound(TopicName, TopicExperience);
+	TMap<FName, int32>& TopicExperience{
+		ExperienceByKind.FindOrAdd(TopicKind)};
+	int32& TotalExperience{TopicExperience.FindOrAdd(TopicName)};
+	TotalExperience += ExperienceAmount;
+	OnExperienceChanged.ExecuteIfBound(
+		TopicKind, TopicName, TotalExperience);
 }
 
-int32 AStudyPlayerState::GetExperience(FName TopicName) const
+int32 AStudyPlayerState::GetExperience(
+	EStudyTopicKind TopicKind, FName TopicName) const
 {
-	const int32* TopicExperience{ExperienceByTopic.Find(TopicName)};
+	const TMap<FName, int32>* TopicExperience{
+		ExperienceByKind.Find(TopicKind)};
 	if (!TopicExperience)
 	{
 		return 0;
 	}
-	return *TopicExperience;
+	const int32* TotalExperience{TopicExperience->Find(TopicName)};
+	if (!TotalExperience)
+	{
+		return 0;
+	}
+	return *TotalExperience;
 }

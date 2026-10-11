@@ -47,6 +47,24 @@ FStudyReviewResult FStudyReviewResult::FromJson(
 	return Result;
 }
 
+FName FStudyReviewResult::GetSubjectTopicName() const
+{
+	if (SubjectName.IsEmpty())
+	{
+		return FName{TEXT("General")};
+	}
+	return FName{SubjectName};
+}
+
+FName FStudyReviewResult::GetSectionTopicName() const
+{
+	if (SectionName.IsEmpty())
+	{
+		return FName{SectionId};
+	}
+	return FName{SectionName};
+}
+
 TArray<FStudyPartResult> FStudyReviewResult::ParseParts(
 	const FJsonObject& JsonObject)
 {

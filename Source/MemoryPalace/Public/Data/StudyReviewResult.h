@@ -58,6 +58,12 @@ struct FStudyReviewResult
 	static FStudyReviewResult FromJson(
 		const FJsonObject& JsonObject);
 
+	/* Returns the name the subject's experience is stored under */
+	FName GetSubjectTopicName() const;
+
+	/* Returns the name the section's experience is stored under */
+	FName GetSectionTopicName() const;
+
 	/* Identifier of the problem that was reviewed */
 	FString ProblemId;
 
