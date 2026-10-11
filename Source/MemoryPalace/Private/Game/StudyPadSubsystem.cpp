@@ -208,8 +208,8 @@ void UStudyPadSubsystem::HandleHintResponse(
 		&& Response->GetResponseCode() == HttpStatusOk};
 	if (!bHasHint)
 	{
-		const FString FailureMessage{
-			BuildHintFailureMessage(Response, bConnectedSuccessfully)};
+		const FString FailureMessage{BuildHintFailureMessage(
+			Response, bConnectedSuccessfully)};
 		OnHintUpdated.ExecuteIfBound(FailureMessage);
 		return;
 	}
