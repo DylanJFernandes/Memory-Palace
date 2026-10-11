@@ -18,6 +18,7 @@ public class MemoryPalace : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
+			"WebBrowserWidget",
 			"Slate",
 			"HTTP",
 			"Json",
