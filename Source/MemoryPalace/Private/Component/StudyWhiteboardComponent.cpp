@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Texture2D.h"
 #include "Game/StudyPadSubsystem.h"
+#include "ImageUtils.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 namespace
@@ -13,6 +14,7 @@ namespace
 
 UStudyWhiteboardComponent::UStudyWhiteboardComponent()
 	: TextureParameterName{TEXT("WhiteboardTexture")}
+	, bIsShowingSavedImage{false}
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -67,11 +69,38 @@ void UStudyWhiteboardComponent::HandleWorkImageUpdated(
 	const FString& UpdatedProblemId, UTexture2D* WorkTexture,
 	float AspectRatio)
 {
-	if (UpdatedProblemId != ProblemId)
+	if (UpdatedProblemId != ProblemId || bIsShowingSavedImage)
 	{
 		return;
 	}
 	ShowTexture(WorkTexture);
+}
+
+void UStudyWhiteboardComponent::ShowSavedImage(
+	const TArray<uint8>& PngBytes)
+{
+	bIsShowingSavedImage = true;
+	SavedImageTexture =
+		FImageUtils::ImportBufferAsTexture2D(PngBytes);
+	ShowTexture(SavedImageTexture);
+}
+
+void UStudyWhiteboardComponent::ShowLiveImage()
+{
+	bIsShowingSavedImage = false;
+	SavedImageTexture = nullptr;
+	if (!CachedStudyPadSubsystem.IsValid())
+	{
+		ShowTexture(nullptr);
+		return;
+	}
+	ShowTexture(
+		CachedStudyPadSubsystem->GetTextureForProblem(ProblemId));
+}
+
+const FString& UStudyWhiteboardComponent::GetProblemId() const
+{
+	return ProblemId;
 }
 
 void UStudyWhiteboardComponent::ShowTexture(UTexture2D* WorkTexture)

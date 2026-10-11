@@ -22,6 +22,16 @@ public:
 	/* Sets default values for this component */
 	UStudyWhiteboardComponent();
 
+	/* Shows a saved PNG instead of the live image, which stays
+	   hidden until ShowLiveImage is called */
+	void ShowSavedImage(const TArray<uint8>& PngBytes);
+
+	/* Goes back to following the live study pad image */
+	void ShowLiveImage();
+
+	/* Returns the id of the problem this whiteboard shows */
+	const FString& GetProblemId() const;
+
 protected:
 	/* Creates the material and listens for new images */
 	virtual void BeginPlay() override;
@@ -65,6 +75,13 @@ private:
 	/* Dynamic material that displays the whiteboard image */
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> WhiteboardMaterial;
+
+	/* Texture of the saved PNG currently shown, if any */
+	UPROPERTY()
+	TObjectPtr<UTexture2D> SavedImageTexture;
+
+	/* Whether a saved PNG is shown instead of the live image */
+	bool bIsShowingSavedImage;
 
 	// Cached Vars
 	/* Subsystem this component is subscribed to */
