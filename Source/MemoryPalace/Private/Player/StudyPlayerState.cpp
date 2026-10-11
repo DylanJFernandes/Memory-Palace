@@ -19,6 +19,23 @@ void AStudyPlayerState::AddExperience(
 		TopicKind, TopicName, TotalExperience);
 }
 
+void AStudyPlayerState::RecordPartAward(
+	const FString& PartKey, const FDateTime& AwardTime)
+{
+	LastAwardTimeByPartKey.Add(PartKey, AwardTime);
+}
+
+TOptional<FDateTime> AStudyPlayerState::GetLastPartAwardTime(
+	const FString& PartKey) const
+{
+	const FDateTime* AwardTime{LastAwardTimeByPartKey.Find(PartKey)};
+	if (!AwardTime)
+	{
+		return TOptional<FDateTime>{};
+	}
+	return *AwardTime;
+}
+
 int32 AStudyPlayerState::GetExperience(
 	EStudyTopicKind TopicKind, FName TopicName) const
 {

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/StudyTopicKind.h"
 #include "GameFramework/PlayerState.h"
+#include "Misc/Optional.h"
 #include "StudyPlayerState.generated.h"
 
 /* Fires with a topic's kind, name and new experience total; only
@@ -30,10 +31,21 @@ public:
 	int32 GetExperience(EStudyTopicKind TopicKind,
 						FName TopicName) const;
 
+	/* Remembers when a part of a problem last earned experience */
+	void RecordPartAward(const FString& PartKey,
+						 const FDateTime& AwardTime);
+
+	/* Returns when a part last earned experience, if it ever did */
+	TOptional<FDateTime> GetLastPartAwardTime(
+		const FString& PartKey) const;
+
 	/* Fires whenever a topic gains experience */
 	FStudyExperienceChanged OnExperienceChanged;
 
 private:
+	/* When each part of each problem last earned experience */
+	TMap<FString, FDateTime> LastAwardTimeByPartKey;
+
 	/* Experience earned so far, by topic kind then topic name */
 	TMap<EStudyTopicKind, TMap<FName, int32>> ExperienceByKind;
 };
