@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "MemoryPalacePlayerController.generated.h"
 
+class AStudyHUD;
 class IStudyPageable;
 class UInputAction;
 class UInputMappingContext;
@@ -37,6 +38,14 @@ public:
 	   console command */
 	UFUNCTION(Exec)
 	void StudySkipDays(float Days);
+
+	/* Opens the pause menu, or closes it when it is open. Exec
+	   makes it usable as a console command */
+	UFUNCTION(Exec)
+	void TogglePauseMenu();
+
+	/* Hides the pause menu and gives the game its input back */
+	void ClosePauseMenu();
 
 	/* Fires when the cursor becomes active */
 	FStudyCursorEvent OnCursorShown;
@@ -75,6 +84,20 @@ protected:
 	bool ShouldUseTouchControls() const;
 
 private:
+	/* Returns the study HUD, caching it on first use */
+	AStudyHUD* GetStudyHUD();
+
+	/* Shows the pause menu and the mouse cursor and stops the
+	   camera and movement */
+	void OpenPauseMenu();
+
+	/* Binds the keys that open the pause menu */
+	void BindPauseKeys();
+
+	/* Puts the viewport back into game-only input after the menu
+	   levels left it in UI-only mode */
+	void RestoreGameInput();
+
 	/* Adds the default mapping contexts for this player */
 	void AddMappingContexts();
 
@@ -129,6 +152,9 @@ private:
 	/* Action held to use the mouse cursor on the screen */
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|Input")
 	TObjectPtr<UInputAction> CursorAction;
+
+	/* HUD that owns the pause menu */
+	TWeakObjectPtr<AStudyHUD> CachedStudyHUD;
 
 	/* Component that clicks and types into world widgets */
 	UPROPERTY(VisibleAnywhere, Category = "Custom|Components")

@@ -13,6 +13,7 @@
 #include "Interaction/StudyInteractable.h"
 #include "Interaction/StudyPageable.h"
 #include "Player/MemoryPalaceCameraManager.h"
+#include "UI/HUD/StudyHUD.h"
 #include "Blueprint/UserWidget.h"
 #include "Component/StudyCursorInteractionComponent.h"
 #include "MemoryPalace.h"
@@ -53,7 +54,7 @@ bool AMemoryPalacePlayerController::InputKey(
 void AMemoryPalacePlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-
+	RestoreGameInput();
 
 	// only spawn touch controls on local player controllers
 	if (IsLocalPlayerController() && ShouldUseTouchControls())
@@ -75,6 +76,12 @@ void AMemoryPalacePlayerController::BeginPlay()
 	}
 }
 
+void AMemoryPalacePlayerController::RestoreGameInput()
+{
+	SetShowMouseCursor(false);
+	SetInputMode(FInputModeGameOnly{});
+}
+
 void AMemoryPalacePlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -85,6 +92,7 @@ void AMemoryPalacePlayerController::SetupInputComponent()
 	AddMappingContexts();
 	BindStudyActions();
 	BindPageKeys();
+	BindPauseKeys();
 	BindCursorForwarding();
 }
 
@@ -143,6 +151,65 @@ void AMemoryPalacePlayerController::BindStudyActions()
 			CursorAction, ETriggerEvent::Completed, this,
 			&AMemoryPalacePlayerController::HandleCursorReleased);
 	}
+}
+
+void AMemoryPalacePlayerController::BindPauseKeys()
+{
+	InputComponent->BindKey(
+		EKeys::Escape, IE_Pressed, this,
+		&AMemoryPalacePlayerController::TogglePauseMenu);
+	InputComponent->BindKey(
+		EKeys::Gamepad_Special_Right, IE_Pressed, this,
+		&AMemoryPalacePlayerController::TogglePauseMenu);
+}
+
+void AMemoryPalacePlayerController::TogglePauseMenu()
+{
+	AStudyHUD* StudyHUD{GetStudyHUD()};
+	if (!StudyHUD || bIsCursorActive)
+	{
+		return;
+	}
+	if (StudyHUD->GetIsPauseMenuOpen())
+	{
+		ClosePauseMenu();
+		return;
+	}
+	OpenPauseMenu();
+}
+
+void AMemoryPalacePlayerController::OpenPauseMenu()
+{
+	GetStudyHUD()->ShowPauseMenu();
+	SetShowMouseCursor(true);
+	SetIgnoreLookInput(true);
+	SetIgnoreMoveInput(true);
+	FInputModeGameAndUI MenuInputMode;
+	MenuInputMode.SetHideCursorDuringCapture(false);
+	MenuInputMode.SetLockMouseToViewportBehavior(
+		EMouseLockMode::DoNotLock);
+	SetInputMode(MenuInputMode);
+}
+
+void AMemoryPalacePlayerController::ClosePauseMenu()
+{
+	AStudyHUD* StudyHUD{GetStudyHUD()};
+	if (StudyHUD)
+	{
+		StudyHUD->HidePauseMenu();
+	}
+	SetIgnoreLookInput(false);
+	SetIgnoreMoveInput(false);
+	RestoreGameInput();
+}
+
+AStudyHUD* AMemoryPalacePlayerController::GetStudyHUD()
+{
+	if (!CachedStudyHUD.IsValid())
+	{
+		CachedStudyHUD = GetHUD<AStudyHUD>();
+	}
+	return CachedStudyHUD.Get();
 }
 
 void AMemoryPalacePlayerController::BindPageKeys()
