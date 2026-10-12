@@ -1,0 +1,50 @@
+[
+  {
+    "id": "quadratic-vertex-form",
+    "subjectName": "Precalculus",
+    "sectionId": "quadratic-functions",
+    "sectionName": "Quadratic Functions",
+    "difficultyRating": 2,
+    "equation": "y = -2(x + 4)^2 - 8",
+    "instructions": "Find the vertex, the y-intercept, the x-intercepts, and whether the parabola opens up or down.",
+    "parts": [
+      { "id": "vertex", "label": "Vertex", "kind": "point", "correct": [-4, -8] },
+      { "id": "yIntercept", "label": "y-intercept", "kind": "number", "correct": -40 },
+      { "id": "xIntercepts", "label": "x-intercepts", "kind": "numberSet", "correct": [],
+        "correctText": "none (no real solutions)" },
+      { "id": "opens", "label": "Opens", "kind": "choice", "options": ["up", "down"], "correct": "down" }
+    ],
+    "visual": {
+      "type": "parabola",
+      "params": { "a": -2, "h": -4, "k": -8 },
+      "studentParams": {
+        "h": { "part": "vertex", "index": 0 },
+        "k": { "part": "vertex", "index": 1 }
+      }
+    }
+  },
+  {
+    "id": "quadratic-standard-form",
+    "subjectName": "Precalculus",
+    "sectionId": "quadratic-functions",
+    "sectionName": "Quadratic Functions",
+    "difficultyRating": 3,
+    "equation": "y = 2x^2 - 4x - 9",
+    "instructions": "Find the vertex, the y-intercept, the x-intercepts, and whether the parabola opens up or down.",
+    "parts": [
+      { "id": "vertex", "label": "Vertex", "kind": "point", "correct": [1, -11] },
+      { "id": "yIntercept", "label": "y-intercept", "kind": "number", "correct": -9 },
+      { "id": "xIntercepts", "label": "x-intercepts", "kind": "numberSet", "correct": [-1.3452, 3.3452],
+        "correctText": "1 ± √22/2 (about -1.35 and 3.35)" },
+      { "id": "opens", "label": "Opens", "kind": "choice", "options": ["up", "down"], "correct": "up" }
+    ],
+    "visual": {
+      "type": "parabola",
+      "params": { "a": 2, "h": 1, "k": -11 },
+      "studentParams": {
+        "h": { "part": "vertex", "index": 0 },
+        "k": { "part": "vertex", "index": 1 }
+      }
+    }
+  }
+]

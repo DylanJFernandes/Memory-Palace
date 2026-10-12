@@ -18,20 +18,15 @@ public class MemoryPalace : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"WebBrowserWidget",
+			"Slate",
+			"HTTP",
+			"Json",
+			"ProceduralMeshComponent",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
-
-		PublicIncludePaths.AddRange(new string[] {
-			"MemoryPalace",
-			"MemoryPalace/Variant_Horror",
-			"MemoryPalace/Variant_Horror/UI",
-			"MemoryPalace/Variant_Shooter",
-			"MemoryPalace/Variant_Shooter/AI",
-			"MemoryPalace/Variant_Shooter/UI",
-			"MemoryPalace/Variant_Shooter/Weapons"
-		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

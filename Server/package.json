@@ -1,0 +1,13 @@
+{
+  "name": "memory-palace-study-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local study pad server for Memory Palace: serves the tablet whiteboard page and grades work with Claude.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

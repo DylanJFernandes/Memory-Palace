@@ -24,6 +24,10 @@
 			]
 		},
 		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
+		},
+		{
 			"Name": "StateTree",
 			"Enabled": true
 		},
@@ -41,6 +45,10 @@
 		},
 		{
 			"Name": "AllToolsets",
+			"Enabled": true
+		},
+		{
+			"Name": "WebBrowserWidget",
 			"Enabled": true
 		}
 	]
