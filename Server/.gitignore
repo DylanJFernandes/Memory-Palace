@@ -1,0 +1,12 @@
+# Never commit secrets
+ANTHROPIC_API_KEY
+set
+.env
+*.key
+
+# Runtime data written by the server
+savedwork.json
+
+# Local backups
+*.bak-*
+node_modules/

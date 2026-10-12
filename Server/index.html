@@ -1,0 +1,1643 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Study Pad</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f4f1ea; font-family: -apple-system, sans-serif; overscroll-behavior: none; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; background: #222; color: #fff; }
+  #equation { flex: 1; min-width: 200px; font-size: 22px; font-family: Menlo, monospace; }
+  #timer { font-size: 18px; min-width: 56px; text-align: right; }
+  #pausedOverlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 32px; align-items: center; justify-content: center; z-index: 10; }
+  #pausedOverlay.visible { display: flex; }
+  button { font-size: 18px; padding: 8px 14px; border-radius: 8px; border: 0; background: #444; color: #fff; }
+  button:disabled { opacity: 0.35; }
+  button.primary { background: #2b8a3e; }
+  .modeGroup { display: flex; border-radius: 8px; overflow: hidden; }
+  .modeGroup button { border-radius: 0; }
+  .modeGroup button.active { background: #1c7ed6; }
+  #symbolBar { display: none; flex-wrap: wrap; gap: 6px; padding: 6px 12px; background: #333; }
+  #symbolBar.visible { display: flex; }
+  #symbolBar button { font-size: 20px; min-width: 44px; padding: 6px 10px; background: #555; }
+  #symbolHint { color: #bbb; font-size: 13px; align-self: center; margin-left: 6px; }
+  #status { padding: 6px 12px; background: #eee; font-size: 16px; min-height: 22px; }
+  #canvasArea { position: relative; overflow: hidden; }
+  /* touch-action none stops Safari scrolling/zooming the page; we handle pan and zoom ourselves. */
+  #drawingCanvas { display: block; width: 100%; touch-action: none; background: #fbfaf7; }
+  #drawingCanvas.typeMode { cursor: text; }
+  #drawingCanvas.eraseMode { cursor: none; }
+  #drawingCanvas.selectMode { cursor: default; }
+  #drawingCanvas.panMode, #drawingCanvas.panning { cursor: grab; }
+  /* Selection outlines live on their own layer so they never get sent to the AI. */
+  #overlayCanvas { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; }
+  #selectionActions { position: absolute; display: none; gap: 6px; z-index: 5; }
+  #selectionActions button { font-size: 16px; padding: 6px 12px; background: #1c7ed6; }
+  #selectionActions button.danger { background: #c92a2a; }
+  #zoomControls { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; z-index: 5; }
+  #zoomControls button { font-size: 16px; padding: 6px 10px; background: rgba(34, 34, 34, 0.85); }
+  #zoomLevel { min-width: 58px; }
+  .textEditor { position: absolute; display: flex; align-items: center; gap: 4px; z-index: 6; }
+  .textBlockInput {
+    font-family: -apple-system, sans-serif; color: #111; line-height: 1.2;
+    border: 2px dashed #1c7ed6; background: rgba(231, 245, 255, 0.85); padding: 0 4px; margin: 0;
+    min-width: 120px; outline: none; -webkit-user-select: text; user-select: text;
+  }
+  .deleteTextButton { font-size: 18px; padding: 4px 8px; background: #c92a2a; }
+  #eraserCursor {
+    position: absolute; pointer-events: none; display: none; border: 2px solid #868e96;
+    border-radius: 50%; background: rgba(255, 255, 255, 0.4); transform: translate(-50%, -50%);
+  }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <div id="equation">Waiting for a problem from the game...</div>
+  <div id="timer">0:00</div>
+  <button id="pauseButton" disabled>⏸ Pause</button>
+  <div class="modeGroup">
+    <button id="drawModeButton" class="active">✏️ Draw</button>
+    <button id="typeModeButton">⌨️ Type</button>
+    <button id="eraseModeButton">🧽 Erase</button>
+    <button id="selectModeButton">⬚ Select</button>
+    <button id="panModeButton">✋ Pan</button>
+  </div>
+  <button id="pasteButton" disabled>📋 Paste</button>
+  <button id="undoButton" title="Undo">↶</button>
+  <button id="redoButton" title="Redo">↷</button>
+  <button id="clearButton">Clear</button>
+  <button id="submitButton" class="primary">Submit</button>
+</div>
+<div id="symbolBar"></div>
+<div id="status"></div>
+<div id="canvasArea">
+  <canvas id="drawingCanvas"></canvas>
+  <canvas id="overlayCanvas"></canvas>
+  <div id="eraserCursor"></div>
+  <div id="pausedOverlay">Paused - tap Resume to keep working</div>
+  <div id="selectionActions">
+    <button id="editTextButton">Edit</button>
+    <button id="copySelectionButton">Copy</button>
+    <button id="cutSelectionButton">Cut</button>
+    <button id="duplicateSelectionButton">Duplicate</button>
+    <button id="deleteSelectionButton" class="danger">Delete</button>
+  </div>
+  <div id="zoomControls">
+    <button id="zoomOutButton" title="Zoom out">−</button>
+    <button id="zoomLevel" title="Reset to 100%">100%</button>
+    <button id="zoomInButton" title="Zoom in">+</button>
+    <button id="fitButton" title="Fit all work on screen">⤢ Fit</button>
+  </div>
+</div>
+
+<script>
+// ===================================================================================
+// Coordinates
+//   "World" units: where objects live on the endless canvas (1 unit = 1 CSS px at 100% zoom).
+//   "Screen" units: CSS px from the top-left of the canvas element.
+//   screen = (world - camera) * zoom        world = screen / zoom + camera
+// Sizes that should feel the same no matter the zoom (pen width, tap tolerance, eraser)
+// are defined in screen px and divided by zoom when converted to world units.
+// ===================================================================================
+
+const FRAME_UPLOAD_INTERVAL_MS = 1000;
+const PIXEL_RATIO = 2;                  // canvas pixels per CSS px, for sharp lines
+const TEXT_FONT_SIZE_SCREEN = 28;
+const ERASER_DIAMETER_SCREEN = 36;
+const TEXT_INPUT_OFFSET_X_SCREEN = 6;   // input border + padding, so typed text lines up with canvas text
+const TEXT_INPUT_OFFSET_Y_SCREEN = 2;
+const STROKE_HIT_TOLERANCE_SCREEN = 10; // how close a tap must be to a line to select it
+const RESIZE_HANDLE_SIZE_SCREEN = 14;
+const RESIZE_HANDLE_HIT_SCREEN = 20;
+const PASTE_OFFSET_SCREEN = 24;
+const DOUBLE_TAP_MS = 350;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 8;
+const GRID_SPACING_WORLD = 40;
+const EXPORT_MAX_DIMENSION_PX = 2000;  // size of the image sent to the AI / UE5
+const EXPORT_MAX_SCALE = 3;
+const EXPORT_PADDING_WORLD = 40;
+
+// Buttons shown in Type mode. "insert" is what gets typed into the active text block.
+const MATH_SYMBOLS = [
+  { label: "√", insert: "√(" }, { label: "²", insert: "²" }, { label: "³", insert: "³" },
+  { label: "^", insert: "^" }, { label: "±", insert: "±" }, { label: "π", insert: "π" },
+  { label: "θ", insert: "θ" }, { label: "≤", insert: "≤" }, { label: "≥", insert: "≥" },
+  { label: "≠", insert: "≠" }, { label: "×", insert: "×" }, { label: "÷", insert: "÷" },
+  { label: "∞", insert: "∞" }, { label: "( )", insert: "()" }, { label: "−", insert: "−" },
+];
+
+// Typed shortcuts that turn into symbols automatically.
+const AUTO_REPLACEMENTS = [
+  ["sqrt", "√("], ["+-", "±"], ["<=", "≤"], [">=", "≥"], ["!=", "≠"],
+  ["^2", "²"], ["^3", "³"], ["pi", "π"], ["theta", "θ"], ["inf", "∞"],
+];
+
+const MODE_STATUS_TEXT = {
+  draw: "Draw mode. Two fingers to pan and pinch to zoom.",
+  type: "Type mode: tap empty space for a new text block, or tap existing text to edit it.",
+  erase: "Erase mode: rub out parts of your drawing. Touching typed text removes that whole block.",
+  select: "Select mode: tap an object or drag a box. Drag to move, drag a corner handle to resize.",
+  pan: "Pan mode: drag to move around. Pinch or Ctrl+scroll to zoom.",
+};
+
+const canvasElement = document.getElementById("drawingCanvas");
+const overlayCanvas = document.getElementById("overlayCanvas");
+const canvasArea = document.getElementById("canvasArea");
+const drawingContext = canvasElement.getContext("2d");
+const overlayContext = overlayCanvas.getContext("2d");
+const measuringContext = document.createElement("canvas").getContext("2d");
+const equationElement = document.getElementById("equation");
+const timerElement = document.getElementById("timer");
+const statusElement = document.getElementById("status");
+const symbolBar = document.getElementById("symbolBar");
+const undoButton = document.getElementById("undoButton");
+const redoButton = document.getElementById("redoButton");
+const pasteButton = document.getElementById("pasteButton");
+const eraserCursor = document.getElementById("eraserCursor");
+const selectionActions = document.getElementById("selectionActions");
+const zoomLevelButton = document.getElementById("zoomLevel");
+
+// The page is a list of objects, in world units:
+//   { id, type: "stroke", points: [{ x, y, width }] }        one pen-down-to-pen-up line
+//   { id, type: "text", content, x, y, fontSize }             one typed text box
+// Objects are never changed in place; every change builds a new list and saves the
+// old one as an undo snapshot, so undo/redo covers everything.
+let documentItems = [];
+let undoSnapshots = [];
+let redoSnapshots = [];
+let nextItemId = 1;
+let camera = { x: 0, y: 0, zoom: 1 };
+
+let currentMode = "draw";
+let currentStroke = null;          // stroke being drawn right now
+let eraseSession = null;           // { itemsBefore, previousPoint } while erasing
+let activeTextEditor = null;       // { wrapper, input, editingItemId, fontSize }
+let hasUnsentChanges = true;
+let hasUnsyncedWork = false;       // items changed here and not yet saved to the server
+let isWorkSyncReady = false;       // the server's copy was loaded for the active problem
+let isWorkSyncRunning = false;
+let knownWorkRevision = 0;         // newest server revision this page has seen or written
+let problemStartTimeMs = null;
+
+// Selection
+let selectedIds = new Set();
+let selectionGesture = null;       // { kind: "box" | "move" | "resize", startPoint, currentPoint, ... }
+let clipboard = null;              // { items, pasteCount }
+let lastTap = { itemId: null, timeMs: 0 };
+
+// Panning and zooming
+const activeTouchPoints = new Map();   // pointerId -> { x, y } screen, for pinch
+let pinchGesture = null;
+let panGesture = null;
+let ignoreTouchesUntilAllLifted = false;
+let penDetected = false;               // once the Pencil is used, one finger pans instead of drawing
+let spaceKeyHeld = false;
+
+// Holding Ctrl switches to Select temporarily.
+let modeBeforeCtrl = null;
+let restoreModeAfterGesture = false;
+
+// ---------- State changes ----------
+
+function commitChange(newItems, itemsBefore = documentItems) {
+  undoSnapshots.push(itemsBefore);
+  documentItems = newItems;
+  redoSnapshots = [];
+  dropMissingSelection();
+  hasUnsentChanges = true;
+  hasUnsyncedWork = true;
+  renderPage();
+}
+
+function undo() {
+  closeTextEditor();
+  if (undoSnapshots.length === 0) return;
+  redoSnapshots.push(documentItems);
+  documentItems = undoSnapshots.pop();
+  dropMissingSelection();
+  hasUnsentChanges = true;
+  hasUnsyncedWork = true;
+  renderPage();
+}
+
+function redo() {
+  closeTextEditor();
+  if (redoSnapshots.length === 0) return;
+  undoSnapshots.push(documentItems);
+  documentItems = redoSnapshots.pop();
+  dropMissingSelection();
+  hasUnsentChanges = true;
+  hasUnsyncedWork = true;
+  renderPage();
+}
+
+function dropMissingSelection() {
+  const existingIds = new Set(documentItems.map((item) => item.id));
+  selectedIds = new Set([...selectedIds].filter((itemId) => existingIds.has(itemId)));
+}
+
+// ---------- Camera ----------
+
+function screenToWorld(screenPoint) {
+  return { x: screenPoint.x / camera.zoom + camera.x, y: screenPoint.y / camera.zoom + camera.y };
+}
+
+function worldToScreen(worldPoint) {
+  return { x: (worldPoint.x - camera.x) * camera.zoom, y: (worldPoint.y - camera.y) * camera.zoom };
+}
+
+function getScreenPoint(pointerEvent) {
+  const canvasBounds = canvasElement.getBoundingClientRect();
+  return { x: pointerEvent.clientX - canvasBounds.left, y: pointerEvent.clientY - canvasBounds.top };
+}
+
+function getWorldPoint(pointerEvent) {
+  return screenToWorld(getScreenPoint(pointerEvent));
+}
+
+function screenToWorldLength(screenLength) {
+  return screenLength / camera.zoom;
+}
+
+function zoomAroundScreenPoint(screenPoint, newZoom) {
+  const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+  const worldUnderPoint = screenToWorld(screenPoint);
+  camera = {
+    zoom: clampedZoom,
+    x: worldUnderPoint.x - screenPoint.x / clampedZoom,
+    y: worldUnderPoint.y - screenPoint.y / clampedZoom,
+  };
+  cameraChanged();
+}
+
+function zoomAroundCenter(zoomFactor) {
+  zoomAroundScreenPoint({ x: canvasElement.clientWidth / 2, y: canvasElement.clientHeight / 2 }, camera.zoom * zoomFactor);
+}
+
+function fitAllWork() {
+  if (documentItems.length === 0) { camera = { x: 0, y: 0, zoom: 1 }; cameraChanged(); return; }
+  const bounds = unionBounds(documentItems);
+  const margin = 60;
+  const contentWidth = Math.max(1, bounds.right - bounds.left);
+  const contentHeight = Math.max(1, bounds.bottom - bounds.top);
+  const fittedZoom = Math.max(MIN_ZOOM, Math.min(2,
+    (canvasElement.clientWidth - margin * 2) / contentWidth,
+    (canvasElement.clientHeight - margin * 2) / contentHeight));
+  camera = {
+    zoom: fittedZoom,
+    x: (bounds.left + bounds.right) / 2 - canvasElement.clientWidth / 2 / fittedZoom,
+    y: (bounds.top + bounds.bottom) / 2 - canvasElement.clientHeight / 2 / fittedZoom,
+  };
+  cameraChanged();
+}
+
+function cameraChanged() {
+  closeTextEditor();   // the text box is positioned in screen space, so save it before the view moves
+  zoomLevelButton.textContent = Math.round(camera.zoom * 100) + "%";
+  renderPage();
+}
+
+// ---------- Geometry (all in world units) ----------
+
+function measureTextBlock(content, fontSize) {
+  measuringContext.font = fontSize + "px -apple-system, sans-serif";
+  return { width: measuringContext.measureText(content).width, height: fontSize * 1.2 };
+}
+
+function getItemBounds(item) {
+  if (item.type === "text") {
+    const size = measureTextBlock(item.content, item.fontSize);
+    return { left: item.x, top: item.y, right: item.x + size.width, bottom: item.y + size.height };
+  }
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const point of item.points) {
+    const halfWidth = point.width / 2;
+    left = Math.min(left, point.x - halfWidth);
+    top = Math.min(top, point.y - halfWidth);
+    right = Math.max(right, point.x + halfWidth);
+    bottom = Math.max(bottom, point.y + halfWidth);
+  }
+  return { left, top, right, bottom };
+}
+
+function unionBounds(items) {
+  const allBounds = items.map(getItemBounds);
+  return {
+    left: Math.min(...allBounds.map((bounds) => bounds.left)),
+    top: Math.min(...allBounds.map((bounds) => bounds.top)),
+    right: Math.max(...allBounds.map((bounds) => bounds.right)),
+    bottom: Math.max(...allBounds.map((bounds) => bounds.bottom)),
+  };
+}
+
+function distanceFromPointToSegment(point, segmentStart, segmentEnd) {
+  const segmentX = segmentEnd.x - segmentStart.x;
+  const segmentY = segmentEnd.y - segmentStart.y;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+  let projection = segmentLengthSquared === 0 ? 0 :
+    ((point.x - segmentStart.x) * segmentX + (point.y - segmentStart.y) * segmentY) / segmentLengthSquared;
+  projection = Math.max(0, Math.min(1, projection));
+  return Math.hypot(point.x - (segmentStart.x + projection * segmentX), point.y - (segmentStart.y + projection * segmentY));
+}
+
+function segmentsCross(firstStart, firstEnd, secondStart, secondEnd) {
+  const orientation = (pointA, pointB, pointC) => (pointB.x - pointA.x) * (pointC.y - pointA.y) - (pointB.y - pointA.y) * (pointC.x - pointA.x);
+  return orientation(firstStart, firstEnd, secondStart) * orientation(firstStart, firstEnd, secondEnd) < 0 &&
+         orientation(secondStart, secondEnd, firstStart) * orientation(secondStart, secondEnd, firstEnd) < 0;
+}
+
+function distanceBetweenSegments(firstStart, firstEnd, secondStart, secondEnd) {
+  if (segmentsCross(firstStart, firstEnd, secondStart, secondEnd)) return 0;
+  return Math.min(
+    distanceFromPointToSegment(firstStart, secondStart, secondEnd),
+    distanceFromPointToSegment(firstEnd, secondStart, secondEnd),
+    distanceFromPointToSegment(secondStart, firstStart, firstEnd),
+    distanceFromPointToSegment(secondEnd, firstStart, firstEnd),
+  );
+}
+
+function isPointOnItem(item, point) {
+  if (item.type === "text") {
+    const bounds = getItemBounds(item);
+    const margin = screenToWorldLength(6);
+    return point.x >= bounds.left - margin && point.x <= bounds.right + margin &&
+           point.y >= bounds.top - margin && point.y <= bounds.bottom + margin;
+  }
+  const tolerance = screenToWorldLength(STROKE_HIT_TOLERANCE_SCREEN);
+  if (item.points.length === 1) return Math.hypot(point.x - item.points[0].x, point.y - item.points[0].y) <= tolerance + item.points[0].width / 2;
+  for (let pointIndex = 1; pointIndex < item.points.length; pointIndex++) {
+    const segmentEnd = item.points[pointIndex];
+    if (distanceFromPointToSegment(point, item.points[pointIndex - 1], segmentEnd) <= tolerance + segmentEnd.width / 2) return true;
+  }
+  return false;
+}
+
+function findTopItemAt(point, onlyType) {
+  // Text is drawn on top of ink, so check text first; within a type, newest first.
+  for (const wantedType of ["text", "stroke"]) {
+    if (onlyType && wantedType !== onlyType) continue;
+    for (let itemIndex = documentItems.length - 1; itemIndex >= 0; itemIndex--) {
+      const item = documentItems[itemIndex];
+      if (item.type === wantedType && isPointOnItem(item, point)) return item;
+    }
+  }
+  return null;
+}
+
+function isItemInsideBox(item, box) {
+  if (item.type === "text") {
+    // Any overlap with the text box selects the whole text box.
+    const bounds = getItemBounds(item);
+    return bounds.left < box.right && bounds.right > box.left && bounds.top < box.bottom && bounds.bottom > box.top;
+  }
+  const isInside = (point) => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
+  if (item.points.some(isInside)) return true;
+  // Also catch lines that pass straight through the box between two points.
+  const boxEdges = [
+    [{ x: box.left, y: box.top }, { x: box.right, y: box.top }], [{ x: box.right, y: box.top }, { x: box.right, y: box.bottom }],
+    [{ x: box.right, y: box.bottom }, { x: box.left, y: box.bottom }], [{ x: box.left, y: box.bottom }, { x: box.left, y: box.top }],
+  ];
+  for (let pointIndex = 1; pointIndex < item.points.length; pointIndex++) {
+    for (const [edgeStart, edgeEnd] of boxEdges) {
+      if (segmentsCross(item.points[pointIndex - 1], item.points[pointIndex], edgeStart, edgeEnd)) return true;
+    }
+  }
+  return false;
+}
+
+function translateItem(item, offsetX, offsetY) {
+  if (item.type === "text") return { ...item, x: item.x + offsetX, y: item.y + offsetY };
+  return { ...item, points: item.points.map((point) => ({ ...point, x: point.x + offsetX, y: point.y + offsetY })) };
+}
+
+function scaleItem(item, anchor, scaleFactor) {
+  const scalePoint = (point) => ({ x: anchor.x + (point.x - anchor.x) * scaleFactor, y: anchor.y + (point.y - anchor.y) * scaleFactor });
+  if (item.type === "text") return { ...item, ...scalePoint(item), fontSize: item.fontSize * scaleFactor };
+  return { ...item, points: item.points.map((point) => ({ ...scalePoint(point), width: point.width * scaleFactor })) };
+}
+
+// ---------- Rendering ----------
+
+function resizeCanvas() {
+  const usedHeight = document.getElementById("toolbar").offsetHeight + symbolBar.offsetHeight + statusElement.offsetHeight;
+  const canvasHeightCss = Math.max(300, window.innerHeight - usedHeight);
+  for (const canvas of [canvasElement, overlayCanvas]) {
+    canvas.width = window.innerWidth * PIXEL_RATIO;
+    canvas.height = canvasHeightCss * PIXEL_RATIO;
+    canvas.style.height = canvasHeightCss + "px";
+  }
+  renderPage();
+}
+
+function drawStroke(context, stroke) {
+  context.strokeStyle = "#111";
+  context.fillStyle = "#111";
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  for (let pointIndex = 1; pointIndex < stroke.points.length; pointIndex++) {
+    const previousPoint = stroke.points[pointIndex - 1];
+    const point = stroke.points[pointIndex];
+    context.lineWidth = point.width;
+    context.beginPath();
+    context.moveTo(previousPoint.x, previousPoint.y);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+  }
+  if (stroke.points.length === 1) {   // a single tap leaves a dot
+    const dotPoint = stroke.points[0];
+    context.beginPath();
+    context.arc(dotPoint.x, dotPoint.y, dotPoint.width / 2, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+function drawTextBlock(context, textItem) {
+  context.font = textItem.fontSize + "px -apple-system, sans-serif";
+  context.textBaseline = "top";
+  context.fillStyle = "#111";
+  context.fillText(textItem.content, textItem.x, textItem.y);
+}
+
+// Draws objects in world units; the caller sets the context's transform.
+function drawItems(context, items, hiddenTextId) {
+  for (const item of items) if (item.type === "stroke") drawStroke(context, item);
+  for (const item of items) if (item.type === "text" && item.id !== hiddenTextId) drawTextBlock(context, item);
+}
+
+function applyWorldTransform(context) {
+  const totalScale = PIXEL_RATIO * camera.zoom;
+  context.setTransform(totalScale, 0, 0, totalScale, -camera.x * totalScale, -camera.y * totalScale);
+}
+
+function drawDotGrid() {
+  // Dots in screen space so they stay crisp; spacing doubles when zoomed far out.
+  let spacingWorld = GRID_SPACING_WORLD;
+  while (spacingWorld * camera.zoom < 16) spacingWorld *= 2;
+  const spacingScreen = spacingWorld * camera.zoom;
+  const firstX = (Math.ceil(camera.x / spacingWorld) * spacingWorld - camera.x) * camera.zoom;
+  const firstY = (Math.ceil(camera.y / spacingWorld) * spacingWorld - camera.y) * camera.zoom;
+  drawingContext.fillStyle = "#d9d6cf";
+  for (let screenX = firstX; screenX < canvasElement.clientWidth; screenX += spacingScreen) {
+    for (let screenY = firstY; screenY < canvasElement.clientHeight; screenY += spacingScreen) {
+      drawingContext.fillRect(screenX - 1, screenY - 1, 2, 2);
+    }
+  }
+}
+
+// While dragging or resizing a selection, show it at its new position/size.
+function getItemsAsDisplayed() {
+  if (!selectionGesture || !selectionGesture.movedEnough) return documentItems;
+  if (selectionGesture.kind === "move") {
+    const offsetX = selectionGesture.currentPoint.x - selectionGesture.startPoint.x;
+    const offsetY = selectionGesture.currentPoint.y - selectionGesture.startPoint.y;
+    return documentItems.map((item) => (selectedIds.has(item.id) ? translateItem(item, offsetX, offsetY) : item));
+  }
+  if (selectionGesture.kind === "resize") {
+    const scaleFactor = getResizeScaleFactor();
+    return documentItems.map((item) => (selectedIds.has(item.id) ? scaleItem(item, selectionGesture.anchor, scaleFactor) : item));
+  }
+  return documentItems;
+}
+
+function renderPage() {
+  const displayedItems = getItemsAsDisplayed();
+  drawingContext.setTransform(PIXEL_RATIO, 0, 0, PIXEL_RATIO, 0, 0);
+  drawingContext.fillStyle = "#fbfaf7";
+  drawingContext.fillRect(0, 0, canvasElement.clientWidth, canvasElement.clientHeight);
+  drawDotGrid();
+  applyWorldTransform(drawingContext);
+  drawItems(drawingContext, currentStroke ? [...displayedItems, currentStroke] : displayedItems,
+    activeTextEditor ? activeTextEditor.editingItemId : null);
+  renderOverlay(displayedItems);
+  undoButton.disabled = undoSnapshots.length === 0;
+  redoButton.disabled = redoSnapshots.length === 0;
+  pasteButton.disabled = !clipboard;
+}
+
+function getScreenBounds(worldBounds) {
+  const topLeft = worldToScreen({ x: worldBounds.left, y: worldBounds.top });
+  const bottomRight = worldToScreen({ x: worldBounds.right, y: worldBounds.bottom });
+  return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
+}
+
+const SELECTION_PADDING_SCREEN = 6;
+
+function getSelectionScreenBox(selectedItems) {
+  const bounds = getScreenBounds(unionBounds(selectedItems));
+  return {
+    left: bounds.left - SELECTION_PADDING_SCREEN, top: bounds.top - SELECTION_PADDING_SCREEN,
+    right: bounds.right + SELECTION_PADDING_SCREEN, bottom: bounds.bottom + SELECTION_PADDING_SCREEN,
+  };
+}
+
+function getResizeHandles(selectedItems) {
+  const box = getSelectionScreenBox(selectedItems);
+  return [
+    { corner: "topLeft", x: box.left, y: box.top, opposite: "bottomRight" },
+    { corner: "topRight", x: box.right, y: box.top, opposite: "bottomLeft" },
+    { corner: "bottomLeft", x: box.left, y: box.bottom, opposite: "topRight" },
+    { corner: "bottomRight", x: box.right, y: box.bottom, opposite: "topLeft" },
+  ];
+}
+
+function renderOverlay(displayedItems) {
+  overlayContext.setTransform(PIXEL_RATIO, 0, 0, PIXEL_RATIO, 0, 0);
+  overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayContext.lineWidth = 2;
+  overlayContext.setLineDash([6, 4]);
+
+  // Outline every selected object.
+  const selectedItems = displayedItems.filter((item) => selectedIds.has(item.id));
+  overlayContext.strokeStyle = "#1c7ed6";
+  overlayContext.fillStyle = "rgba(28, 126, 214, 0.06)";
+  for (const item of selectedItems) {
+    const bounds = getScreenBounds(getItemBounds(item));
+    const padding = SELECTION_PADDING_SCREEN;
+    overlayContext.fillRect(bounds.left - padding, bounds.top - padding, bounds.right - bounds.left + padding * 2, bounds.bottom - bounds.top + padding * 2);
+    overlayContext.strokeRect(bounds.left - padding, bounds.top - padding, bounds.right - bounds.left + padding * 2, bounds.bottom - bounds.top + padding * 2);
+  }
+
+  // Corner handles for resizing (around the whole selection when several are selected).
+  const isBoxSelecting = selectionGesture && selectionGesture.kind === "box";
+  if (selectedItems.length && !isBoxSelecting && !activeTextEditor) {
+    overlayContext.setLineDash([]);
+    if (selectedItems.length > 1) {
+      const groupBox = getSelectionScreenBox(selectedItems);
+      overlayContext.strokeStyle = "rgba(28, 126, 214, 0.5)";
+      overlayContext.strokeRect(groupBox.left, groupBox.top, groupBox.right - groupBox.left, groupBox.bottom - groupBox.top);
+    }
+    const handleSize = RESIZE_HANDLE_SIZE_SCREEN;
+    overlayContext.fillStyle = "#fff";
+    overlayContext.strokeStyle = "#1c7ed6";
+    for (const handle of getResizeHandles(selectedItems)) {
+      overlayContext.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+      overlayContext.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+    }
+  }
+
+  // The drag-a-box rectangle.
+  if (isBoxSelecting) {
+    const box = getScreenBounds(getGestureBox());
+    overlayContext.setLineDash([6, 4]);
+    overlayContext.strokeStyle = "#868e96";
+    overlayContext.strokeRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+  }
+  overlayContext.setLineDash([]);
+  positionSelectionActions(selectedItems);
+}
+
+function positionSelectionActions(selectedItems) {
+  const isDragging = selectionGesture && (selectionGesture.kind === "box" || selectionGesture.movedEnough);
+  if (selectedItems.length === 0 || isDragging || activeTextEditor) { selectionActions.style.display = "none"; return; }
+  const box = getSelectionScreenBox(selectedItems);
+  const isSingleText = selectedItems.length === 1 && selectedItems[0].type === "text";
+  document.getElementById("editTextButton").style.display = isSingleText ? "" : "none";
+  selectionActions.style.display = "flex";
+  const leftPosition = Math.max(0, Math.min(box.left, canvasElement.clientWidth - selectionActions.offsetWidth));
+  const belowPosition = box.bottom + 14;
+  const abovePosition = box.top - selectionActions.offsetHeight - 14;
+  const fitsBelow = belowPosition + selectionActions.offsetHeight < canvasElement.clientHeight - 50;
+  selectionActions.style.left = leftPosition + "px";
+  selectionActions.style.top = Math.max(0, fitsBelow ? belowPosition : abovePosition) + "px";
+}
+
+// Picture of ALL the work (not just what's on screen) for the AI and the UE5 mirror.
+function exportWorkCanvas() {
+  const exportCanvas = document.createElement("canvas");
+  const exportContext = exportCanvas.getContext("2d");
+  if (documentItems.length === 0) {
+    exportCanvas.width = 800;
+    exportCanvas.height = 600;
+    exportContext.fillStyle = "#fff";
+    exportContext.fillRect(0, 0, 800, 600);
+    return exportCanvas;
+  }
+  const bounds = unionBounds(documentItems);
+  const left = bounds.left - EXPORT_PADDING_WORLD;
+  const top = bounds.top - EXPORT_PADDING_WORLD;
+  const width = bounds.right - bounds.left + EXPORT_PADDING_WORLD * 2;
+  const height = bounds.bottom - bounds.top + EXPORT_PADDING_WORLD * 2;
+  const exportScale = Math.min(EXPORT_MAX_SCALE, EXPORT_MAX_DIMENSION_PX / Math.max(width, height));
+  exportCanvas.width = Math.max(1, Math.round(width * exportScale));
+  exportCanvas.height = Math.max(1, Math.round(height * exportScale));
+  exportContext.fillStyle = "#fff";
+  exportContext.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+  exportContext.setTransform(exportScale, 0, 0, exportScale, -left * exportScale, -top * exportScale);
+  drawItems(exportContext, documentItems, null);
+  return exportCanvas;
+}
+
+// ---------- Pointer input ----------
+
+function getStrokeWidth(pointerEvent) {
+  // Pencil reports real pressure; mouse/finger report 0.5 or 0. Width looks the same at any zoom.
+  const pressure = pointerEvent.pressure > 0 ? pointerEvent.pressure : 0.5;
+  return screenToWorldLength(2 + pressure * 5);
+}
+
+function moveEraserCursor(pointerEvent) {
+  if (currentMode !== "erase") return;
+  const screenPoint = getScreenPoint(pointerEvent);
+  eraserCursor.style.left = screenPoint.x + "px";
+  eraserCursor.style.top = screenPoint.y + "px";
+  eraserCursor.style.display = "block";
+}
+
+// Abandon whatever one-finger action was starting when a second finger lands (pinch takes over).
+function cancelGestureInProgress() {
+  currentStroke = null;
+  if (eraseSession) { documentItems = eraseSession.itemsBefore; eraseSession = null; }
+  selectionGesture = null;
+  panGesture = null;
+  renderPage();
+}
+
+function shouldPan(pointerEvent) {
+  if (currentMode === "pan" || spaceKeyHeld || pointerEvent.button === 1) return true;
+  // After a Pencil has been used, a single finger pans in draw/erase (palm-friendly, like Miro).
+  return pointerEvent.pointerType === "touch" && penDetected && (currentMode === "draw" || currentMode === "erase");
+}
+
+canvasElement.addEventListener("pointerdown", (pointerEvent) => {
+  if (pointerEvent.pointerType === "pen" && !penDetected) {
+    penDetected = true;
+    statusElement.textContent = "Pencil detected: Pencil draws, one finger pans, two fingers pinch to zoom.";
+  }
+  if (pointerEvent.pointerType === "touch") {
+    activeTouchPoints.set(pointerEvent.pointerId, getScreenPoint(pointerEvent));
+    if (activeTouchPoints.size >= 2) { startPinch(); return; }
+    if (ignoreTouchesUntilAllLifted) return;
+  }
+  try { canvasElement.setPointerCapture(pointerEvent.pointerId); } catch (error) { /* pointer already gone */ }
+
+  if (shouldPan(pointerEvent)) {
+    pointerEvent.preventDefault();
+    closeTextEditor();
+    panGesture = { startScreen: getScreenPoint(pointerEvent), startCamera: { ...camera } };
+    canvasElement.classList.add("panning");
+    return;
+  }
+  // Ctrl held on the pointer event counts too, in case the key press itself was missed.
+  if (currentMode === "select" || (pointerEvent.ctrlKey && !activeTextEditor)) {
+    pointerEvent.preventDefault();
+    startSelectionGesture(pointerEvent);
+    return;
+  }
+  clearSelection();   // drawing, typing or erasing dismisses the selection
+  if (currentMode === "type") {
+    pointerEvent.preventDefault();
+    const tappedText = findTopItemAt(getWorldPoint(pointerEvent), "text");
+    if (tappedText) openTextEditorFor(tappedText);
+    else openTextEditorAt(pointerEvent);
+    return;
+  }
+  const startPoint = getWorldPoint(pointerEvent);
+  if (currentMode === "erase") {
+    moveEraserCursor(pointerEvent);
+    eraseSession = { itemsBefore: documentItems, previousPoint: startPoint };
+    eraseAlong(startPoint, startPoint);
+    return;
+  }
+  currentStroke = { id: nextItemId++, type: "stroke", points: [{ ...startPoint, width: getStrokeWidth(pointerEvent) }] };
+  renderPage();
+});
+
+canvasElement.addEventListener("pointermove", (pointerEvent) => {
+  if (pointerEvent.pointerType === "touch" && activeTouchPoints.has(pointerEvent.pointerId)) {
+    activeTouchPoints.set(pointerEvent.pointerId, getScreenPoint(pointerEvent));
+    if (pinchGesture) { updatePinch(); return; }
+    if (ignoreTouchesUntilAllLifted) return;
+  }
+  moveEraserCursor(pointerEvent);
+  if (panGesture) {
+    const screenPoint = getScreenPoint(pointerEvent);
+    camera = {
+      ...camera,
+      x: panGesture.startCamera.x - (screenPoint.x - panGesture.startScreen.x) / camera.zoom,
+      y: panGesture.startCamera.y - (screenPoint.y - panGesture.startScreen.y) / camera.zoom,
+    };
+    cameraChanged();
+    return;
+  }
+  if (selectionGesture) { updateSelectionGesture(pointerEvent); return; }
+  if (eraseSession) {
+    const eraserPoint = getWorldPoint(pointerEvent);
+    eraseAlong(eraseSession.previousPoint, eraserPoint);
+    eraseSession.previousPoint = eraserPoint;
+    return;
+  }
+  if (!currentStroke) return;
+  const previousPoint = currentStroke.points[currentStroke.points.length - 1];
+  const nextPoint = { ...getWorldPoint(pointerEvent), width: getStrokeWidth(pointerEvent) };
+  currentStroke.points.push(nextPoint);
+  // Draw just the new segment live; the full redraw happens when the stroke ends.
+  applyWorldTransform(drawingContext);
+  drawingContext.strokeStyle = "#111";
+  drawingContext.lineCap = "round";
+  drawingContext.lineWidth = nextPoint.width;
+  drawingContext.beginPath();
+  drawingContext.moveTo(previousPoint.x, previousPoint.y);
+  drawingContext.lineTo(nextPoint.x, nextPoint.y);
+  drawingContext.stroke();
+});
+
+function finishPointer(pointerEvent) {
+  if (pointerEvent.pointerType === "touch") {
+    activeTouchPoints.delete(pointerEvent.pointerId);
+    if (pinchGesture) {
+      if (activeTouchPoints.size < 2) { pinchGesture = null; ignoreTouchesUntilAllLifted = activeTouchPoints.size > 0; }
+      return;
+    }
+    if (ignoreTouchesUntilAllLifted) { if (activeTouchPoints.size === 0) ignoreTouchesUntilAllLifted = false; return; }
+  }
+  if (panGesture) { panGesture = null; canvasElement.classList.remove("panning"); return; }
+  if (selectionGesture) { finishSelectionGesture(); return; }
+  if (eraseSession) {
+    const { itemsBefore } = eraseSession;
+    eraseSession = null;
+    if (documentItems !== itemsBefore) commitChange(documentItems, itemsBefore);   // one undo step per swipe
+    return;
+  }
+  if (!currentStroke) return;
+  const finishedStroke = currentStroke;   // the object is created when the pen lifts
+  currentStroke = null;
+  commitChange([...documentItems, finishedStroke]);
+}
+canvasElement.addEventListener("pointerup", finishPointer);
+canvasElement.addEventListener("pointercancel", finishPointer);
+canvasElement.addEventListener("pointerleave", () => { if (!eraseSession) eraserCursor.style.display = "none"; });
+
+// ---------- Pinch zoom, scroll and trackpad ----------
+
+function getTwoTouchPoints() {
+  const [firstTouch, secondTouch] = [...activeTouchPoints.values()];
+  return {
+    midpoint: { x: (firstTouch.x + secondTouch.x) / 2, y: (firstTouch.y + secondTouch.y) / 2 },
+    distance: Math.max(1, Math.hypot(firstTouch.x - secondTouch.x, firstTouch.y - secondTouch.y)),
+  };
+}
+
+function startPinch() {
+  cancelGestureInProgress();
+  closeTextEditor();
+  const { midpoint, distance } = getTwoTouchPoints();
+  pinchGesture = { startMidpoint: midpoint, startDistance: distance, startCamera: { ...camera } };
+}
+
+function updatePinch() {
+  const { midpoint, distance } = getTwoTouchPoints();
+  const { startMidpoint, startDistance, startCamera } = pinchGesture;
+  const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, startCamera.zoom * (distance / startDistance)));
+  // Keep the world point that was under the fingers' starting midpoint under their current midpoint.
+  const worldAtStart = { x: startMidpoint.x / startCamera.zoom + startCamera.x, y: startMidpoint.y / startCamera.zoom + startCamera.y };
+  camera = { zoom: newZoom, x: worldAtStart.x - midpoint.x / newZoom, y: worldAtStart.y - midpoint.y / newZoom };
+  cameraChanged();
+}
+
+canvasElement.addEventListener("wheel", (wheelEvent) => {
+  wheelEvent.preventDefault();
+  if (wheelEvent.ctrlKey || wheelEvent.metaKey) {
+    // Trackpad pinch (shows up as Ctrl+wheel) or Ctrl+scroll: zoom at the cursor.
+    // Clamped so one mouse-wheel notch is a gentle step, while trackpad pinches stay smooth.
+    const limitedDelta = Math.max(-100, Math.min(100, wheelEvent.deltaY));
+    zoomAroundScreenPoint(getScreenPoint(wheelEvent), camera.zoom * Math.exp(-limitedDelta * 0.0025));
+  } else {
+    camera = { ...camera, x: camera.x + wheelEvent.deltaX / camera.zoom, y: camera.y + wheelEvent.deltaY / camera.zoom };
+    cameraChanged();
+  }
+}, { passive: false });
+
+// ---------- Eraser: splits strokes where it passes, removes text it touches ----------
+
+function eraseAlong(eraserStart, eraserEnd) {
+  const eraserRadius = screenToWorldLength(ERASER_DIAMETER_SCREEN / 2);
+  let anythingChanged = false;
+  const updatedItems = [];
+
+  for (const item of documentItems) {
+    if (item.type === "text") {
+      const bounds = getItemBounds(item);
+      const closestX = Math.max(bounds.left, Math.min(eraserEnd.x, bounds.right));
+      const closestY = Math.max(bounds.top, Math.min(eraserEnd.y, bounds.bottom));
+      if (Math.hypot(eraserEnd.x - closestX, eraserEnd.y - closestY) <= eraserRadius) { anythingChanged = true; continue; }
+      updatedItems.push(item);
+      continue;
+    }
+    const isErased = (point) => distanceFromPointToSegment(point, eraserStart, eraserEnd) <= eraserRadius;
+    const pieces = [];
+    let currentPiece = [];
+    item.points.forEach((point, pointIndex) => {
+      if (isErased(point)) {
+        if (currentPiece.length) pieces.push(currentPiece);
+        currentPiece = [];
+        return;
+      }
+      // A line between two surviving points can still pass under the eraser.
+      if (pointIndex > 0 && currentPiece.length) {
+        const previousPoint = item.points[pointIndex - 1];
+        if (distanceBetweenSegments(previousPoint, point, eraserStart, eraserEnd) <= eraserRadius) {
+          pieces.push(currentPiece);
+          currentPiece = [];
+        }
+      }
+      currentPiece.push(point);
+    });
+    if (currentPiece.length) pieces.push(currentPiece);
+
+    const isUnchanged = pieces.length === 1 && pieces[0].length === item.points.length;
+    if (isUnchanged) { updatedItems.push(item); continue; }
+    anythingChanged = true;
+    pieces.forEach((piecePoints, pieceIndex) => {
+      updatedItems.push({ id: pieceIndex === 0 ? item.id : nextItemId++, type: "stroke", points: piecePoints });
+    });
+  }
+
+  if (anythingChanged) {
+    documentItems = updatedItems;   // saved as one undo step when the swipe ends
+    renderPage();
+  }
+}
+
+// ---------- Select mode ----------
+
+function findResizeHandleAt(screenPoint) {
+  const selectedItems = getSelectedItems();
+  if (selectedItems.length === 0) return null;
+  return getResizeHandles(selectedItems).find((handle) =>
+    Math.abs(handle.x - screenPoint.x) <= RESIZE_HANDLE_HIT_SCREEN / 2 &&
+    Math.abs(handle.y - screenPoint.y) <= RESIZE_HANDLE_HIT_SCREEN / 2) || null;
+}
+
+function startSelectionGesture(pointerEvent) {
+  closeTextEditor();
+  const screenPoint = getScreenPoint(pointerEvent);
+  const startPoint = screenToWorld(screenPoint);
+
+  // 1. Grabbing a corner handle resizes the selection, anchored at the opposite corner.
+  const grabbedHandle = findResizeHandleAt(screenPoint);
+  if (grabbedHandle) {
+    const handles = getResizeHandles(getSelectedItems());
+    const oppositeHandle = handles.find((handle) => handle.corner === grabbedHandle.opposite);
+    selectionGesture = {
+      kind: "resize", startPoint, currentPoint: startPoint, movedEnough: false,
+      anchor: screenToWorld(oppositeHandle), grabbedCorner: screenToWorld(grabbedHandle),
+    };
+    return;
+  }
+
+  // 2. Tapping an object selects it (and dragging moves the selection).
+  const tappedItem = findTopItemAt(startPoint);
+  if (tappedItem) {
+    const nowMs = Date.now();
+    if (tappedItem.type === "text" && lastTap.itemId === tappedItem.id && nowMs - lastTap.timeMs < DOUBLE_TAP_MS) {
+      lastTap = { itemId: null, timeMs: 0 };   // double-tap a text box to edit it
+      openTextEditorFor(tappedItem);
+      return;
+    }
+    lastTap = { itemId: tappedItem.id, timeMs: nowMs };
+    if (pointerEvent.shiftKey) {
+      selectedIds.has(tappedItem.id) ? selectedIds.delete(tappedItem.id) : selectedIds.add(tappedItem.id);
+    } else if (!selectedIds.has(tappedItem.id)) {
+      selectedIds = new Set([tappedItem.id]);
+    }
+    selectionGesture = { kind: "move", startPoint, currentPoint: startPoint, movedEnough: false };
+  } else {
+    // 3. Empty space: drag a box.
+    lastTap = { itemId: null, timeMs: 0 };
+    if (!pointerEvent.shiftKey) selectedIds = new Set();
+    selectionGesture = { kind: "box", startPoint, currentPoint: startPoint };
+  }
+  renderPage();
+}
+
+function getResizeScaleFactor() {
+  // How far along the anchor→corner diagonal the pointer has been dragged.
+  const { anchor, grabbedCorner, currentPoint, startPoint } = selectionGesture;
+  const draggedCorner = { x: grabbedCorner.x + currentPoint.x - startPoint.x, y: grabbedCorner.y + currentPoint.y - startPoint.y };
+  const diagonalX = grabbedCorner.x - anchor.x;
+  const diagonalY = grabbedCorner.y - anchor.y;
+  const diagonalLengthSquared = diagonalX * diagonalX + diagonalY * diagonalY;
+  if (diagonalLengthSquared < 1e-6) return 1;
+  const projection = ((draggedCorner.x - anchor.x) * diagonalX + (draggedCorner.y - anchor.y) * diagonalY) / diagonalLengthSquared;
+  return Math.max(0.05, projection);
+}
+
+function updateSelectionGesture(pointerEvent) {
+  selectionGesture.currentPoint = getWorldPoint(pointerEvent);
+  if (selectionGesture.kind !== "box" && !selectionGesture.movedEnough) {
+    const dragDistance = Math.hypot(
+      selectionGesture.currentPoint.x - selectionGesture.startPoint.x,
+      selectionGesture.currentPoint.y - selectionGesture.startPoint.y,
+    );
+    selectionGesture.movedEnough = dragDistance > screenToWorldLength(4);   // ignore tiny jitter on a tap
+  }
+  renderPage();
+}
+
+function getGestureBox() {
+  const { startPoint, currentPoint } = selectionGesture;
+  return {
+    left: Math.min(startPoint.x, currentPoint.x), right: Math.max(startPoint.x, currentPoint.x),
+    top: Math.min(startPoint.y, currentPoint.y), bottom: Math.max(startPoint.y, currentPoint.y),
+  };
+}
+
+function finishSelectionGesture() {
+  const gesture = selectionGesture;
+  if ((gesture.kind === "move" || gesture.kind === "resize") && gesture.movedEnough) {
+    const changedItems = getItemsAsDisplayed();
+    selectionGesture = null;
+    commitChange(changedItems);
+  } else if (gesture.kind === "box") {
+    const box = getGestureBox();
+    const minimumSize = screenToWorldLength(6);
+    if (box.right - box.left > minimumSize || box.bottom - box.top > minimumSize) {
+      for (const item of documentItems) if (isItemInsideBox(item, box)) selectedIds.add(item.id);
+    }
+    selectionGesture = null;
+    renderPage();
+  } else {
+    selectionGesture = null;
+    renderPage();
+  }
+  updateSelectionStatus();
+  if (restoreModeAfterGesture) endCtrlSelect();   // Ctrl was let go mid-drag
+}
+
+function updateSelectionStatus() {
+  if (selectedIds.size === 0) { if (currentMode === "select") statusElement.textContent = MODE_STATUS_TEXT.select; return; }
+  const isSingleText = selectedIds.size === 1 && getSelectedItems()[0].type === "text";
+  statusElement.textContent = selectedIds.size + " selected. Drag to move, drag a corner to resize" +
+    (isSingleText ? ", double-tap to edit text." : ".");
+}
+
+function getSelectedItems() {
+  return documentItems.filter((item) => selectedIds.has(item.id));
+}
+
+function clearSelection() {
+  if (selectedIds.size === 0 && !selectionGesture) return;
+  selectedIds = new Set();
+  selectionGesture = null;
+  renderPage();
+}
+
+function copySelection() {
+  const selectedItems = getSelectedItems();
+  if (selectedItems.length === 0) return;
+  // Store real objects, so pasted text is still editable text.
+  clipboard = { items: selectedItems.map((item) => structuredClone(item)), pasteCount: 0 };
+  renderPage();
+  statusElement.textContent = "Copied " + selectedItems.length + ". Tap 📋 Paste to add a copy.";
+}
+
+function deleteSelection() {
+  if (selectedIds.size === 0) return;
+  const deletedCount = selectedIds.size;
+  commitChange(documentItems.filter((item) => !selectedIds.has(item.id)));
+  selectedIds = new Set();
+  renderPage();
+  statusElement.textContent = "Deleted " + deletedCount + ". Tap ↶ to bring it back.";
+}
+
+function cutSelection() {
+  if (selectedIds.size === 0) return;
+  copySelection();
+  clipboard.pasteCount = -1;   // first paste after a cut goes back in the same spot
+  deleteSelection();
+  statusElement.textContent = "Cut. Tap 📋 Paste to put it back, then drag it where you want.";
+}
+
+function insertCopies(sourceItems, offsetWorld) {
+  const copies = sourceItems.map((item) => ({ ...translateItem(structuredClone(item), offsetWorld, offsetWorld), id: nextItemId++ }));
+  commitChange([...documentItems, ...copies]);
+  selectedIds = new Set(copies.map((item) => item.id));   // select the new copies so you can drag them
+  renderPage();
+  statusElement.textContent = "Added " + copies.length + ". Drag to move them.";
+}
+
+function pasteClipboard() {
+  if (!clipboard) return;
+  closeTextEditor();
+  clipboard.pasteCount += 1;
+  if (currentMode !== "select" && modeBeforeCtrl === null) setMode("select");
+  insertCopies(clipboard.items, screenToWorldLength(PASTE_OFFSET_SCREEN) * clipboard.pasteCount);
+}
+
+function duplicateSelection() {
+  const selectedItems = getSelectedItems();
+  if (selectedItems.length) insertCopies(selectedItems, screenToWorldLength(PASTE_OFFSET_SCREEN));
+}
+
+function editSelectedText() {
+  const selectedItems = getSelectedItems();
+  if (selectedItems.length === 1 && selectedItems[0].type === "text") openTextEditorFor(selectedItems[0]);
+}
+
+function selectAll() {
+  if (currentMode !== "select" && modeBeforeCtrl === null) setMode("select");
+  selectedIds = new Set(documentItems.map((item) => item.id));
+  renderPage();
+  updateSelectionStatus();
+}
+
+for (const [buttonId, handler] of [
+  ["editTextButton", editSelectedText],
+  ["copySelectionButton", copySelection],
+  ["cutSelectionButton", cutSelection],
+  ["duplicateSelectionButton", duplicateSelection],
+  ["deleteSelectionButton", deleteSelection],
+]) {
+  document.getElementById(buttonId).addEventListener("click", handler);
+}
+pasteButton.addEventListener("click", pasteClipboard);
+
+// ---------- Type mode ----------
+
+function applyAutoReplacements(textInput) {
+  let updatedText = textInput.value;
+  for (const [typedShortcut, symbol] of AUTO_REPLACEMENTS) {
+    updatedText = updatedText.split(typedShortcut).join(symbol);
+  }
+  if (updatedText !== textInput.value) {
+    textInput.value = updatedText;
+    textInput.setSelectionRange(updatedText.length, updatedText.length);
+  }
+  const fontSizeOnScreen = parseFloat(textInput.style.fontSize) || TEXT_FONT_SIZE_SCREEN;
+  textInput.style.width = Math.max(120, (updatedText.length + 2) * fontSizeOnScreen * 0.6) + "px";
+}
+
+function createTextEditor(leftScreen, topScreen, startingText, editingItemId, fontSizeWorld) {
+  closeTextEditor();
+  const wrapper = document.createElement("div");
+  wrapper.className = "textEditor";
+  wrapper.style.left = leftScreen + "px";
+  wrapper.style.top = topScreen + "px";
+
+  const textInput = document.createElement("input");
+  textInput.type = "text";
+  textInput.className = "textBlockInput";
+  textInput.value = startingText;
+  textInput.style.fontSize = (fontSizeWorld * camera.zoom) + "px";
+  textInput.autocapitalize = "off";
+  textInput.autocomplete = "off";
+  textInput.spellcheck = false;
+  textInput.setAttribute("autocorrect", "off");
+
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "deleteTextButton";
+  deleteButton.textContent = "🗑";
+  deleteButton.title = "Delete this text";
+  // pointerdown + preventDefault so the tap doesn't blur (and save) the input first.
+  deleteButton.addEventListener("pointerdown", (pointerEvent) => { pointerEvent.preventDefault(); deleteActiveText(); });
+  deleteButton.addEventListener("mousedown", (mouseEvent) => mouseEvent.preventDefault());
+
+  textInput.addEventListener("input", () => applyAutoReplacements(textInput));
+  textInput.addEventListener("keydown", (keyEvent) => {
+    if (keyEvent.key === "Enter") { keyEvent.preventDefault(); closeTextEditor(); }
+    if (keyEvent.key === "Escape") { keyEvent.preventDefault(); closeTextEditor({ discardChanges: true }); }
+  });
+  textInput.addEventListener("blur", () => {
+    // Keyboard dismissed or tapped elsewhere: save the block.
+    setTimeout(() => {
+      if (activeTextEditor && activeTextEditor.input === textInput && document.activeElement !== textInput) closeTextEditor();
+    }, 0);
+  });
+
+  wrapper.appendChild(textInput);
+  wrapper.appendChild(deleteButton);
+  canvasArea.appendChild(wrapper);
+  activeTextEditor = { wrapper, input: textInput, editingItemId, fontSize: fontSizeWorld };
+  applyAutoReplacements(textInput);
+  renderPage();   // hides the original while it's being edited
+  textInput.focus();
+  textInput.setSelectionRange(textInput.value.length, textInput.value.length);
+}
+
+function openTextEditorAt(pointerEvent) {
+  const screenPoint = getScreenPoint(pointerEvent);
+  // New text looks the same size on screen at any zoom.
+  createTextEditor(screenPoint.x, screenPoint.y - TEXT_FONT_SIZE_SCREEN / 2, "", null, screenToWorldLength(TEXT_FONT_SIZE_SCREEN));
+}
+
+function openTextEditorFor(textItem) {
+  const screenPoint = worldToScreen(textItem);
+  createTextEditor(screenPoint.x - TEXT_INPUT_OFFSET_X_SCREEN, screenPoint.y - TEXT_INPUT_OFFSET_Y_SCREEN,
+    textItem.content, textItem.id, textItem.fontSize);
+}
+
+function closeTextEditor(options = {}) {
+  if (!activeTextEditor) return;
+  const { wrapper, input, editingItemId, fontSize } = activeTextEditor;
+  activeTextEditor = null;
+  const typedContent = input.value.trim();
+  const originalItem = documentItems.find((item) => item.id === editingItemId);
+  // Measure where the box is BEFORE removing it from the page.
+  const canvasBounds = canvasElement.getBoundingClientRect();
+  const inputBounds = input.getBoundingClientRect();
+  wrapper.remove();
+
+  if (options.discardChanges) { renderPage(); return; }
+
+  if (originalItem) {
+    if (typedContent === originalItem.content) { renderPage(); return; }   // nothing changed
+    if (!typedContent) {   // emptied out = delete
+      commitChange(documentItems.filter((item) => item.id !== editingItemId));
+      return;
+    }
+    commitChange(documentItems.map((item) => (item.id === editingItemId ? { ...item, content: typedContent } : item)));
+    return;
+  }
+
+  if (!typedContent) { renderPage(); return; }
+  const worldPosition = screenToWorld({
+    x: inputBounds.left - canvasBounds.left + TEXT_INPUT_OFFSET_X_SCREEN,
+    y: inputBounds.top - canvasBounds.top + TEXT_INPUT_OFFSET_Y_SCREEN,
+  });
+  commitChange([...documentItems, { id: nextItemId++, type: "text", content: typedContent, ...worldPosition, fontSize }]);
+}
+
+function deleteActiveText() {
+  if (!activeTextEditor) return;
+  activeTextEditor.input.value = "";   // closing an emptied block deletes it
+  closeTextEditor();
+}
+
+function insertSymbol(symbolText) {
+  if (!activeTextEditor) {
+    statusElement.textContent = "Tap the page first to make a text block, then use the symbols.";
+    return;
+  }
+  const textInput = activeTextEditor.input;
+  const selectionStart = textInput.selectionStart ?? textInput.value.length;
+  const selectionEnd = textInput.selectionEnd ?? textInput.value.length;
+  const currentValue = textInput.value;
+  textInput.value = currentValue.slice(0, selectionStart) + symbolText + currentValue.slice(selectionEnd);
+  // For "()" put the cursor between the parentheses.
+  const cursorPosition = selectionStart + (symbolText === "()" ? 1 : symbolText.length);
+  textInput.setSelectionRange(cursorPosition, cursorPosition);
+  applyAutoReplacements(textInput);
+}
+
+for (const symbol of MATH_SYMBOLS) {
+  const symbolButton = document.createElement("button");
+  symbolButton.textContent = symbol.label;
+  // Insert on pointerdown and preventDefault, so the text block keeps focus and the keyboard stays up.
+  symbolButton.addEventListener("pointerdown", (pointerEvent) => { pointerEvent.preventDefault(); insertSymbol(symbol.insert); });
+  symbolButton.addEventListener("mousedown", (mouseEvent) => mouseEvent.preventDefault());
+  symbolBar.appendChild(symbolButton);
+}
+const symbolHint = document.createElement("span");
+symbolHint.id = "symbolHint";
+symbolHint.textContent = "Shortcuts: sqrt → √(   ^2 → ²   +- → ±   <= → ≤   >= → ≥   != → ≠   pi → π";
+symbolBar.appendChild(symbolHint);
+
+// ---------- Modes ----------
+
+const ALL_MODES = ["draw", "type", "erase", "select", "pan"];
+
+function updateModeButtons(activeMode) {
+  for (const mode of ALL_MODES) {
+    document.getElementById(mode + "ModeButton").classList.toggle("active", activeMode === mode);
+    canvasElement.classList.toggle(mode + "Mode", activeMode === mode);
+  }
+  eraserCursor.style.width = ERASER_DIAMETER_SCREEN + "px";
+  eraserCursor.style.height = ERASER_DIAMETER_SCREEN + "px";
+  if (activeMode !== "erase") eraserCursor.style.display = "none";
+}
+
+function setMode(newMode, options = {}) {
+  if (options.temporary) {
+    // Quick Ctrl switch: keep the selection and the screen layout as they are.
+    currentMode = newMode;
+    updateModeButtons(newMode);
+    statusElement.textContent = newMode === "select" ? "Ctrl held: tap or drag to select. Release to go back." : MODE_STATUS_TEXT[newMode];
+    return;
+  }
+  modeBeforeCtrl = null;
+  closeTextEditor();
+  if (newMode !== "select") clearSelection();
+  currentMode = newMode;
+  updateModeButtons(newMode);
+  symbolBar.classList.toggle("visible", newMode === "type");
+  statusElement.textContent = MODE_STATUS_TEXT[newMode];
+  resizeCanvas();   // the symbol bar changes the available height
+}
+
+function startCtrlSelect() {
+  if (modeBeforeCtrl !== null || activeTextEditor || currentMode === "select") return;
+  modeBeforeCtrl = currentMode;
+  setMode("select", { temporary: true });
+}
+
+function endCtrlSelect() {
+  if (modeBeforeCtrl === null) return;
+  if (selectionGesture) { restoreModeAfterGesture = true; return; }   // finish the drag first
+  const previousMode = modeBeforeCtrl;
+  modeBeforeCtrl = null;
+  restoreModeAfterGesture = false;
+  setMode(previousMode, { temporary: true });
+  if (selectedIds.size) updateSelectionStatus();
+}
+
+// ---------- Sync with the server ----------
+
+// ---------- Problem header ----------
+// The active problem is drawn above the work in every picture, so the AI and the game see it too.
+
+// Every picture has the board's shape and size, so the game never has to stretch it.
+// Open the page with ?boardAspect=1.33 (width / height) if the board in the game isn't square.
+const BOARD_ASPECT = Number(new URLSearchParams(location.search).get("boardAspect")) || 1;
+const BOARD_IMAGE_WIDTH_PX = 1600;
+const BOARD_IMAGE_HEIGHT_PX = Math.round(BOARD_IMAGE_WIDTH_PX / BOARD_ASPECT);
+
+const HEADER_PADDING_PX = 28;
+const HEADER_STATEMENT_FONT = "bold 60px -apple-system, sans-serif";
+const HEADER_INSTRUCTIONS_FONT = "32px -apple-system, sans-serif";
+const HEADER_STATEMENT_LINE_PX = 76;
+const HEADER_INSTRUCTIONS_LINE_PX = 42;
+const HEADER_RULE_PX = 4;
+const ACTIVE_PROBLEM_POLL_INTERVAL_MS = 1000;
+
+let activeProblem = null;   // { startNumber, problemId, statement, instructions } chosen in the game
+let isPaused = false;
+let frozenElapsedSeconds = 0;
+const SAVED_WORK_KEY = "studyPadSavedWork";
+let savedWorkByProblem = loadSavedWork();   // problemId -> { documentItems, camera, undoSnapshots, redoSnapshots }
+
+function loadSavedWork() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_WORK_KEY)) || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function persistSavedWork() {
+  try {
+    const storable = {};
+    for (const [problemId, work] of Object.entries(savedWorkByProblem)) {
+      storable[problemId] = { documentItems: work.documentItems, camera: work.camera };
+    }
+    localStorage.setItem(SAVED_WORK_KEY, JSON.stringify(storable));
+  } catch (error) { /* storage full or unavailable; the in-memory copy still works */ }
+}
+
+// Keeps the active problem's work so leaving and coming back doesn't lose it.
+function saveActiveWork() {
+  if (!activeProblem) return;
+  if (hasUnsyncedWork) pushWorkToServer(activeProblem.problemId);   // flush before switching away
+  savedWorkByProblem[activeProblem.problemId] = { documentItems, camera, undoSnapshots, redoSnapshots };
+  persistSavedWork();
+}
+
+function restoreSavedWork(problemId) {
+  const work = savedWorkByProblem[problemId];
+  if (!work) return;
+  documentItems = work.documentItems;
+  camera = work.camera;
+  undoSnapshots = work.undoSnapshots || [];
+  redoSnapshots = work.redoSnapshots || [];
+  cameraChanged();
+}
+
+function showPausedState(paused) {
+  isPaused = paused;
+  document.getElementById("pausedOverlay").classList.toggle("visible", paused);
+  document.getElementById("pauseButton").textContent = paused ? "▶ Resume" : "⏸ Pause";
+}
+
+function wrapTextLines(context, text, maxWidth) {
+  const lines = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const attempt = line ? line + " " + word : word;
+    if (line && context.measureText(attempt).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = attempt;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function layoutProblemHeader(width) {
+  const scratchContext = document.createElement("canvas").getContext("2d");
+  const textWidth = width - HEADER_PADDING_PX * 2;
+  scratchContext.font = HEADER_STATEMENT_FONT;
+  const statementLines = wrapTextLines(scratchContext, activeProblem.statement, textWidth);
+  scratchContext.font = HEADER_INSTRUCTIONS_FONT;
+  const instructionLines = wrapTextLines(scratchContext, activeProblem.instructions, textWidth);
+  const height = HEADER_PADDING_PX * 2 + HEADER_RULE_PX
+    + statementLines.length * HEADER_STATEMENT_LINE_PX
+    + instructionLines.length * HEADER_INSTRUCTIONS_LINE_PX;
+  return { statementLines, instructionLines, height };
+}
+
+function drawTextLines(context, lines, startY, lineHeight) {
+  let lineY = startY;
+  for (const line of lines) {
+    context.fillText(line, HEADER_PADDING_PX, lineY);
+    lineY += lineHeight;
+  }
+  return lineY;
+}
+
+function drawProblemHeader(context, layout) {
+  context.fillStyle = "#f4f6fb";
+  context.fillRect(0, 0, context.canvas.width, layout.height);
+  context.textBaseline = "top";
+  context.fillStyle = "#111";
+  context.font = HEADER_STATEMENT_FONT;
+  const instructionsY = drawTextLines(context, layout.statementLines, HEADER_PADDING_PX, HEADER_STATEMENT_LINE_PX);
+  context.fillStyle = "#444";
+  context.font = HEADER_INSTRUCTIONS_FONT;
+  drawTextLines(context, layout.instructionLines, instructionsY, HEADER_INSTRUCTIONS_LINE_PX);
+  context.fillStyle = "#222";
+  context.fillRect(0, layout.height - HEADER_RULE_PX, context.canvas.width, HEADER_RULE_PX);
+}
+
+// Draws the work below the header, shrunk evenly (never stretched) if it doesn't fit.
+function drawWorkFitted(context, workCanvas, top) {
+  const availableWidth = context.canvas.width;
+  const availableHeight = context.canvas.height - top;
+  const fitScale = Math.min(1, availableWidth / workCanvas.width, availableHeight / workCanvas.height);
+  context.drawImage(workCanvas, 0, top, workCanvas.width * fitScale, workCanvas.height * fitScale);
+}
+
+// The picture sent to the AI and the game: the problem at the top, always the same size, then the work.
+function exportBoardImage() {
+  const boardCanvas = document.createElement("canvas");
+  boardCanvas.width = BOARD_IMAGE_WIDTH_PX;
+  boardCanvas.height = BOARD_IMAGE_HEIGHT_PX;
+  const context = boardCanvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+  let workTop = 0;
+  if (activeProblem) {
+    const layout = layoutProblemHeader(boardCanvas.width);
+    drawProblemHeader(context, layout);
+    workTop = layout.height;
+  }
+  drawWorkFitted(context, exportWorkCanvas(), workTop);
+  return boardCanvas;
+}
+
+function canvasToPngBlob() {
+  return new Promise((resolve) => exportBoardImage().toBlob(resolve, "image/png"));
+}
+
+// Live mirror: send a picture of all the work about once a second, only if it changed.
+setInterval(async () => {
+  if (!activeProblem || !hasUnsentChanges || currentStroke || eraseSession || selectionGesture) return;
+  hasUnsentChanges = false;
+  try {
+    await fetch("/frame?problem=" + encodeURIComponent(activeProblem.problemId), { method: "POST", body: await canvasToPngBlob() });
+  } catch (error) {
+    hasUnsentChanges = true;   // retry next tick
+  }
+}, FRAME_UPLOAD_INTERVAL_MS);
+
+setInterval(() => {
+  if (problemStartTimeMs === null) return;
+  const elapsedSeconds = Math.floor(isPaused ? frozenElapsedSeconds : (Date.now() - problemStartTimeMs) / 1000);
+  timerElement.textContent = Math.floor(elapsedSeconds / 60) + ":" + String(elapsedSeconds % 60).padStart(2, "0");
+}, 250);
+
+// ---------- Work shared through the server ----------
+// The server holds the one real copy of each problem's items, so every open page (iPad,
+// browser, the game's embedded page) shows the same board. Last save wins; camera stays per page.
+const WORK_SYNC_INTERVAL_MS = 1000;
+
+function workUrl(problemId) {
+  return "/work?problem=" + encodeURIComponent(problemId);
+}
+
+function isUserBusyEditing() {
+  return Boolean(currentStroke || eraseSession || selectionGesture || activeTextEditor);
+}
+
+function adoptServerWork(stored, useServerCamera) {
+  documentItems = stored.work.documentItems;
+  if (useServerCamera && stored.work.camera) camera = stored.work.camera;
+  undoSnapshots = [];
+  redoSnapshots = [];
+  for (const item of documentItems) {
+    if (typeof item.id === "number" && item.id >= nextItemId) nextItemId = item.id + 1;
+  }
+  knownWorkRevision = stored.revision;
+  hasUnsentChanges = true;
+  dropMissingSelection();
+}
+
+async function loadServerWork(problemId) {
+  isWorkSyncReady = false;
+  knownWorkRevision = 0;
+  const hadLocalWork = Boolean(savedWorkByProblem[problemId]);
+  let stored = { revision: 0, work: null };
+  try {
+    stored = await (await fetch(workUrl(problemId))).json();
+  } catch (error) { /* keep what this page has; the next sync reconciles */ }
+  if (!activeProblem || activeProblem.problemId !== problemId) return;
+  if (stored.work) {
+    adoptServerWork(stored, !hadLocalWork);
+  } else {
+    hasUnsyncedWork = documentItems.length > 0;
+  }
+  isWorkSyncReady = true;
+}
+
+async function pushWorkToServer(problemId) {
+  hasUnsyncedWork = false;
+  try {
+    const response = await fetch(workUrl(problemId), {
+      method: "PUT",
+      body: JSON.stringify({ documentItems, camera }),
+    });
+    knownWorkRevision = (await response.json()).revision;
+  } catch (error) {
+    hasUnsyncedWork = true;   // retry next tick
+  }
+}
+
+async function pullWorkFromServer(problemId) {
+  try {
+    const stored = await (await fetch(workUrl(problemId))).json();
+    const isStillCurrent = activeProblem && activeProblem.problemId === problemId;
+    if (!isStillCurrent || !stored.work || stored.revision <= knownWorkRevision) return;
+    if (hasUnsyncedWork || isUserBusyEditing()) return;   // pick it up on a later tick
+    adoptServerWork(stored, false);
+  } catch (error) { /* try again next tick */ }
+}
+
+setInterval(async () => {
+  if (!activeProblem || !isWorkSyncReady || isWorkSyncRunning || isUserBusyEditing()) return;
+  isWorkSyncRunning = true;
+  const problemId = activeProblem.problemId;
+  if (hasUnsyncedWork) await pushWorkToServer(problemId);
+  else await pullWorkFromServer(problemId);
+  isWorkSyncRunning = false;
+}, WORK_SYNC_INTERVAL_MS);
+
+function resetWorkArea() {
+  closeTextEditor();
+  documentItems = [];
+  undoSnapshots = [];
+  redoSnapshots = [];
+  selectedIds = new Set();
+  camera = { x: 0, y: 0, zoom: 1 };
+  hasUnsentChanges = true;
+  cameraChanged();
+}
+
+// The game starts problems; the page only shows whichever one is active.
+function applyActiveProblem(current) {
+  saveActiveWork();
+  resetWorkArea();
+  activeProblem = {
+    startNumber: current.startNumber,
+    problemId: current.problemId,
+    statement: current.statement,
+    instructions: current.instructions,
+  };
+  restoreSavedWork(current.problemId);
+  hasUnsentChanges = true;
+  loadServerWork(current.problemId);
+  equationElement.textContent = current.statement;
+  document.getElementById("pauseButton").disabled = false;
+  syncTimer(current);
+  statusElement.textContent = current.instructions;
+}
+
+// The game ended or closed, so the problem ends with it.
+function clearActiveProblem() {
+  saveActiveWork();
+  resetWorkArea();
+  hasUnsentChanges = false;
+  activeProblem = null;
+  showPausedState(false);
+  document.getElementById("pauseButton").disabled = true;
+  equationElement.textContent = "Waiting for a problem from the game...";
+  problemStartTimeMs = null;
+  timerElement.textContent = "0:00";
+}
+
+function syncTimer(current) {
+  problemStartTimeMs = Date.now() - current.elapsedSeconds * 1000;
+  frozenElapsedSeconds = current.elapsedSeconds;
+  showPausedState(Boolean(current.isPaused));
+}
+
+async function pollActiveProblem() {
+  try {
+    const current = await (await fetch("/current.json")).json();
+    if (current.status !== "active") {
+      if (activeProblem) clearActiveProblem();
+      return;
+    }
+    if (activeProblem && activeProblem.startNumber === current.startNumber) {
+      syncTimer(current);
+      return;
+    }
+    applyActiveProblem(current);
+  } catch (error) { /* try again on the next tick */ }
+}
+
+setInterval(pollActiveProblem, ACTIVE_PROBLEM_POLL_INTERVAL_MS);
+pollActiveProblem();
+
+async function submitWork() {
+  closeTextEditor();
+  clearSelection();
+  statusElement.textContent = "Reviewing your work...";
+  let submitResponse;
+  try {
+    submitResponse = await fetch("/submit", { method: "POST", body: await canvasToPngBlob() });
+  } catch (error) {
+    statusElement.textContent = "Couldn't reach the laptop. Check the Wi-Fi and try again.";
+    return;
+  }
+  if (!submitResponse.ok) {
+    statusElement.textContent = "Start a problem in the game first.";
+    return;
+  }
+  const pollIntervalId = setInterval(async () => {
+    try {
+      const result = await (await fetch("/result.json")).json();
+      if (result.status === "done") {
+        clearInterval(pollIntervalId);
+        statusElement.textContent = (result.isCorrect ? "Correct! " : "Not quite. ") + (result.feedback || "");
+      } else if (result.status === "stub") {
+        clearInterval(pollIntervalId);
+        statusElement.textContent = result.feedback;
+      } else if (result.status === "error") {
+        clearInterval(pollIntervalId);
+        statusElement.textContent = "Review failed: " + result.message;
+      }
+    } catch (error) { /* keep polling */ }
+  }, 700);
+}
+
+// ---------- Buttons and keys ----------
+
+for (const mode of ALL_MODES) document.getElementById(mode + "ModeButton").onclick = () => setMode(mode);
+undoButton.onclick = undo;
+redoButton.onclick = redo;
+document.getElementById("clearButton").onclick = () => {
+  closeTextEditor();
+  selectedIds = new Set();
+  if (documentItems.length > 0) commitChange([]);   // undoable
+};
+document.getElementById("submitButton").onclick = submitWork;
+document.getElementById("pauseButton").onclick = async () => {
+  const route = isPaused ? "/resume" : "/pause";
+  try {
+    const reply = await (await fetch(route, { method: "POST" })).json();
+    frozenElapsedSeconds = (Date.now() - problemStartTimeMs) / 1000;
+    showPausedState(reply.isPaused);
+  } catch (error) { /* the next poll fixes the display */ }
+};
+document.getElementById("zoomInButton").onclick = () => zoomAroundCenter(1.25);
+document.getElementById("zoomOutButton").onclick = () => zoomAroundCenter(0.8);
+zoomLevelButton.onclick = () => zoomAroundCenter(1 / camera.zoom);
+document.getElementById("fitButton").onclick = fitAllWork;
+
+document.addEventListener("keyup", (keyEvent) => {
+  if (keyEvent.key === "Control") endCtrlSelect();
+  if (keyEvent.code === "Space") { spaceKeyHeld = false; canvasElement.classList.remove("panning"); }
+});
+window.addEventListener("blur", () => { endCtrlSelect(); spaceKeyHeld = false; });
+
+document.addEventListener("keydown", (keyEvent) => {
+  if (activeTextEditor) return;   // let the text box handle its own keys while typing
+  if (keyEvent.key === "Control" && !keyEvent.repeat) { startCtrlSelect(); return; }
+  if (keyEvent.code === "Space") { keyEvent.preventDefault(); spaceKeyHeld = true; canvasElement.classList.add("panning"); return; }
+  const modifierHeld = keyEvent.ctrlKey || keyEvent.metaKey;
+  const pressedKey = keyEvent.key.toLowerCase();
+  const shortcuts = {
+    z: () => (keyEvent.shiftKey ? redo() : undo()),
+    y: redo,
+    c: copySelection,
+    x: cutSelection,
+    v: pasteClipboard,
+    d: duplicateSelection,
+    a: selectAll,
+    "=": () => zoomAroundCenter(1.25),
+    "+": () => zoomAroundCenter(1.25),
+    "-": () => zoomAroundCenter(0.8),
+    "0": () => zoomAroundCenter(1 / camera.zoom),
+    "1": fitAllWork,
+  };
+  if (modifierHeld && shortcuts[pressedKey]) { keyEvent.preventDefault(); shortcuts[pressedKey](); return; }
+  if ((keyEvent.key === "Delete" || keyEvent.key === "Backspace") && selectedIds.size) { keyEvent.preventDefault(); deleteSelection(); }
+  if (keyEvent.key === "Escape") { clearSelection(); updateSelectionStatus(); }
+});
+
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>
