@@ -9,6 +9,8 @@ void UWorldEntryWidget::NativeConstruct()
 	Super::NativeConstruct();
 	PlayButton->OnClicked.AddDynamic(
 		this, &UWorldEntryWidget::HandlePlayClicked);
+	DeleteButton->OnClicked.AddDynamic(
+		this, &UWorldEntryWidget::HandleDeleteClicked);
 }
 
 void UWorldEntryWidget::ShowWorld(const FString& InWorldName)
@@ -20,4 +22,9 @@ void UWorldEntryWidget::ShowWorld(const FString& InWorldName)
 void UWorldEntryWidget::HandlePlayClicked()
 {
 	OnWorldChosen.ExecuteIfBound(WorldName);
+}
+
+void UWorldEntryWidget::HandleDeleteClicked()
+{
+	OnDeleteRequested.ExecuteIfBound(WorldName);
 }

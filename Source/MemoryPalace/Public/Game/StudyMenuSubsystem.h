@@ -37,6 +37,9 @@ public:
 	/* Adds a world to the list and saves it */
 	void AddWorld(const FString& WorldName);
 
+	/* Removes a world from the list and saves it */
+	void RemoveWorld(const FString& WorldName);
+
 	/* Returns the saved API key */
 	const FString& GetApiKey() const;
 

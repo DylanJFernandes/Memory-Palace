@@ -7,6 +7,7 @@
 #include "GameFramework/HUD.h"
 #include "MenuHUD.generated.h"
 
+class UConfirmDeleteWidget;
 class UCreateWorldWidget;
 class USettingsWidget;
 class UStudyMenuSubsystem;
@@ -52,6 +53,13 @@ private:
 
 	/* Shows the world list */
 	void ShowWorldSelect();
+
+	/* Asks the player to confirm deleting a world */
+	void ShowDeleteConfirmation(const FString& WorldName);
+
+	/* Deletes the world that was asked about and shows the
+	   updated list */
+	void ConfirmDeleteWorld();
 
 	/* Shows the settings with the saved key */
 	void ShowSettings();
@@ -114,6 +122,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Custom|UI")
 	TSubclassOf<UCreateWorldWidget> CreateWorldWidgetClass;
 
+	/* Widget class of the delete confirmation */
+	UPROPERTY(EditDefaultsOnly, Category = "Custom|UI")
+	TSubclassOf<UConfirmDeleteWidget> ConfirmDeleteWidgetClass;
+
 	// Widgets
 	/* Title screen created by this HUD */
 	UPROPERTY()
@@ -130,6 +142,13 @@ private:
 	/* Create world screen created by this HUD */
 	UPROPERTY()
 	TObjectPtr<UCreateWorldWidget> CreateWorldWidget;
+
+	/* Delete confirmation created by this HUD */
+	UPROPERTY()
+	TObjectPtr<UConfirmDeleteWidget> ConfirmDeleteWidget;
+
+	/* World the player is being asked to delete */
+	FString PendingDeleteWorldName;
 
 	/* Timer that checks the upload while creating a world */
 	FTimerHandle UploadStatusTimerHandle;

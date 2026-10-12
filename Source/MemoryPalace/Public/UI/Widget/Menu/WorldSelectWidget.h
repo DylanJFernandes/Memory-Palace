@@ -23,6 +23,9 @@ public:
 	/* Fires with the world whose Play was pressed */
 	FStudyWorldChosen OnWorldChosen;
 
+	/* Fires with the world whose Delete was pressed */
+	FStudyWorldChosen OnWorldDeleteRequested;
+
 	/* Fires when Create World is pressed */
 	FSimpleDelegate OnCreateWorldPressed;
 
@@ -36,6 +39,9 @@ protected:
 private:
 	/* Passes a row's chosen world on */
 	void HandleWorldChosen(const FString& WorldName);
+
+	/* Passes a row's world to delete on */
+	void HandleWorldDeleteRequested(const FString& WorldName);
 
 	/* Announces that Create World was pressed */
 	UFUNCTION()

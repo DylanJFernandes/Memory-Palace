@@ -78,6 +78,12 @@ void UStudyMenuSubsystem::AddWorld(const FString& WorldName)
 	SaveToDisk();
 }
 
+void UStudyMenuSubsystem::RemoveWorld(const FString& WorldName)
+{
+	MenuSaveGame->WorldNames.Remove(WorldName);
+	SaveToDisk();
+}
+
 const FString& UStudyMenuSubsystem::GetApiKey() const
 {
 	return MenuSaveGame->ApiKey;

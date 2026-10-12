@@ -29,6 +29,8 @@ void UWorldSelectWidget::ShowWorlds(
 		WorldEntry->ShowWorld(WorldName);
 		WorldEntry->OnWorldChosen.BindUObject(
 			this, &UWorldSelectWidget::HandleWorldChosen);
+		WorldEntry->OnDeleteRequested.BindUObject(this,
+			&UWorldSelectWidget::HandleWorldDeleteRequested);
 		WorldListScrollBox->AddChild(WorldEntry);
 	}
 }
@@ -37,6 +39,12 @@ void UWorldSelectWidget::HandleWorldChosen(
 	const FString& WorldName)
 {
 	OnWorldChosen.ExecuteIfBound(WorldName);
+}
+
+void UWorldSelectWidget::HandleWorldDeleteRequested(
+	const FString& WorldName)
+{
+	OnWorldDeleteRequested.ExecuteIfBound(WorldName);
 }
 
 void UWorldSelectWidget::HandleCreateWorldClicked()

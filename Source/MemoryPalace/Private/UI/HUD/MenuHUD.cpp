@@ -7,6 +7,7 @@
 #include "Game/StudyMenuSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "UI/Widget/Menu/ConfirmDeleteWidget.h"
 #include "UI/Widget/Menu/CreateWorldWidget.h"
 #include "UI/Widget/Menu/SettingsWidget.h"
 #include "UI/Widget/Menu/TitleScreenWidget.h"
@@ -33,6 +34,7 @@ void AMenuHUD::CreateScreens()
 	SettingsWidget = CreateScreen(SettingsWidgetClass);
 	WorldSelectWidget = CreateScreen(WorldSelectWidgetClass);
 	CreateWorldWidget = CreateScreen(CreateWorldWidgetClass);
+	ConfirmDeleteWidget = CreateScreen(ConfirmDeleteWidgetClass);
 }
 
 template <typename WidgetType>
@@ -58,6 +60,12 @@ void AMenuHUD::BindScreenEvents()
 		this, &AMenuHUD::ShowTitleScreen);
 	WorldSelectWidget->OnWorldChosen.BindUObject(
 		this, &AMenuHUD::PlayWorld);
+	WorldSelectWidget->OnWorldDeleteRequested.BindUObject(
+		this, &AMenuHUD::ShowDeleteConfirmation);
+	ConfirmDeleteWidget->OnConfirmed.BindUObject(
+		this, &AMenuHUD::ConfirmDeleteWorld);
+	ConfirmDeleteWidget->OnCancelled.BindUObject(
+		this, &AMenuHUD::ShowWorldSelect);
 	WorldSelectWidget->OnCreateWorldPressed.BindUObject(
 		this, &AMenuHUD::ShowCreateWorld);
 	WorldSelectWidget->OnCancelPressed.BindUObject(
@@ -80,7 +88,8 @@ void AMenuHUD::BindMenuSubsystemEvents()
 void AMenuHUD::ShowScreen(UUserWidget* Screen)
 {
 	const TArray<UUserWidget*> Screens{TitleScreenWidget,
-		SettingsWidget, WorldSelectWidget, CreateWorldWidget};
+		SettingsWidget, WorldSelectWidget, CreateWorldWidget,
+		ConfirmDeleteWidget};
 	for (UUserWidget* Candidate : Screens)
 	{
 		Candidate->SetVisibility(Candidate == Screen
@@ -99,6 +108,19 @@ void AMenuHUD::ShowWorldSelect()
 	WorldSelectWidget->ShowWorlds(
 		GetMenuSubsystem()->GetWorldNames());
 	ShowScreen(WorldSelectWidget);
+}
+
+void AMenuHUD::ShowDeleteConfirmation(const FString& WorldName)
+{
+	PendingDeleteWorldName = WorldName;
+	ConfirmDeleteWidget->ShowWorld(WorldName);
+	ShowScreen(ConfirmDeleteWidget);
+}
+
+void AMenuHUD::ConfirmDeleteWorld()
+{
+	GetMenuSubsystem()->RemoveWorld(PendingDeleteWorldName);
+	ShowWorldSelect();
 }
 
 void AMenuHUD::ShowSettings()

@@ -25,6 +25,9 @@ public:
 	/* Fires when Play is pressed */
 	FStudyWorldChosen OnWorldChosen;
 
+	/* Fires when Delete is pressed */
+	FStudyWorldChosen OnDeleteRequested;
+
 protected:
 	/* Listens to the Play button */
 	virtual void NativeConstruct() override;
@@ -34,6 +37,10 @@ private:
 	UFUNCTION()
 	void HandlePlayClicked();
 
+	/* Announces that this row's world should be deleted */
+	UFUNCTION()
+	void HandleDeleteClicked();
+
 	/* Name of the world */
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> WorldNameText;
@@ -41,6 +48,10 @@ private:
 	/* Opens the world */
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> PlayButton;
+
+	/* Asks to delete the world */
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> DeleteButton;
 
 	/* World shown on this row */
 	FString WorldName;
