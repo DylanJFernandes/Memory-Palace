@@ -72,10 +72,9 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
-MemoryPalace.uproject
-.vsconfig
-Automation_MemoryPalace.slnx
-MemoryPalace.slnx
+
+# Generated solution files
+*.slnx
 
 # Local tooling
 .idea/
@@ -83,3 +82,6 @@ MemoryPalace.slnx
 *.blend1
 __pycache__/
 *.pyc
+
+# IDE plugin installed per machine by Rider
+Plugins/Developer/RiderLink/
